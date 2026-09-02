@@ -71,15 +71,19 @@ export interface Strings {
   have: (n: number) => string;
   needed: (n: number) => string;
   close: string;
-  adCta: (n: number) => string;
-  adCtaAria: (n: number) => string;
+  // пополнение баланса (одна общая кнопка и в меню, и в магазине в игре)
+  topUp: (n: number) => string;
+  topUpNote: string;
+  topUpAria: (n: number) => string;
+  // диалог покупки
+  confirmBuyText: (name: string, price: number) => string;
+  cancel: string;
   // реклама (награда за просмотр)
   adTitle: string;
   adNote: string;
   adSeconds: (s: number) => string;
   adClaim: (n: number) => string;
   adCloseAria: string;
-  adRewarded: (n: number) => string;
   // оверлей поражения
   levelFailed: (n: number) => string;
   loseMoves: string;
@@ -154,14 +158,16 @@ const ru: Strings = {
   have: (n) => `Есть: ${n}`,
   needed: (n) => `Не хватает ${n}`,
   close: "Закрыть",
-  adCta: (n) => `Реклама +${n}`,
-  adCtaAria: (n) => `Посмотреть рекламу и получить ${n} монет`,
+  topUp: (n) => `Пополнить +${n}`,
+  topUpNote: "за просмотр рекламы",
+  topUpAria: (n) => `Посмотреть рекламу и пополнить баланс на ${n} монет`,
+  confirmBuyText: (name, price) => `Купить «${name}» за ${price} монет?`,
+  cancel: "Отмена",
   adTitle: "РЕКЛАМА",
   adNote: "Демо-ролик: настоящая реклама появится после подключения рекламной сети",
   adSeconds: (s) => `${s} с`,
   adClaim: (n) => `Забрать +${n} монет`,
   adCloseAria: "Закрыть рекламу без награды",
-  adRewarded: (n) => `+${n} МОНЕТ`,
   levelFailed: (n) => `Уровень ${n} не пройден`,
   loseMoves: "Ходы закончились!",
   loseBombs: "Бабах! Бомбы одолели",
@@ -230,14 +236,16 @@ const en: Strings = {
   have: (n) => `Have: ${n}`,
   needed: (n) => `Need ${n} more`,
   close: "Close",
-  adCta: (n) => `Ad +${n}`,
-  adCtaAria: (n) => `Watch an ad and get ${n} coins`,
+  topUp: (n) => `Top up +${n}`,
+  topUpNote: "for watching an ad",
+  topUpAria: (n) => `Watch an ad to top up your balance with ${n} coins`,
+  confirmBuyText: (name, price) => `Buy "${name}" for ${price} coins?`,
+  cancel: "Cancel",
   adTitle: "ADVERTISEMENT",
   adNote: "Demo roll: a real ad will appear once an ad network is connected",
   adSeconds: (s) => `${s}s`,
   adClaim: (n) => `Claim +${n} coins`,
   adCloseAria: "Close the ad without a reward",
-  adRewarded: (n) => `+${n} COINS`,
   levelFailed: (n) => `Level ${n} failed`,
   loseMoves: "Out of moves!",
   loseBombs: "Boom! The bombs won",

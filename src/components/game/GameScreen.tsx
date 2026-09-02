@@ -16,7 +16,6 @@ import {
   Video,
   Volume2,
   VolumeX,
-  X,
 } from "lucide-react";
 import {
   applyHammer,
@@ -67,6 +66,8 @@ import {
 import { coinsFor, collectGoal, goalProgressTexts, goalReached, scoreMultiplier, starsFor, type LevelDef } from "./levels";
 import { tr, type Lang, type Strings } from "./i18n";
 import { PRICES, type BoosterKind } from "./progress";
+import AdOverlay from "./AdOverlay";
+import BuyConfirm from "./BuyConfirm";
 
 export interface LevelResult {
   levelN: number;
@@ -96,8 +97,7 @@ interface Props {
   onExit: () => void;
 }
 
-/** длительность демо-«рекламы», секунд */
-const AD_SECONDS = 5;
+/** длительность демо-«рекламы» живёт в AdOverlay */
 
 function makeInitialGame(level: LevelDef): GameState {
   const grid = emptyGrid();
@@ -184,6 +184,12 @@ export default function GameScreen({
   // ── Магазин внутри уровня (покупка бустеров не выходя в меню) ──────────
   const [shopOpen, setShopOpen] = useState(false);
   const shopOpenRef = useRef(false);
+  // ── Подтверждение покупки: выбранный предмет ждёт «Купить»/«Отмена» ──
+  const [pendingBuy, setPendingBuy] = useState<BoosterKind | null>(null);
+  const pendingBuyRef = useRef<BoosterKind | null>(null);
+  useEffect(() => {
+    pendingBuyRef.current = pendingBuy;
+  }, [pendingBuy]);
   const openShop = useCallback(() => {
     shopOpenRef.current = true;
     setShopOpen(true);
@@ -193,40 +199,18 @@ export default function GameScreen({
     setShopOpen(false);
   }, []);
 
-  // ── «Реклама» за монеты: 5 секунд демо-ролика → +adReward монет ────────
+  // ── «Реклама» за монеты: одна общая кнопка пополнения (+adReward монет, ──
+  // без автопокупки — игрок сам решает, на что копить)
   const [adPlaying, setAdPlaying] = useState(false);
   const adPlayingRef = useRef(false);
-  const [adLeft, setAdLeft] = useState(AD_SECONDS * 1000);
-  const [adDone, setAdDone] = useState(false);
-  /** бустер, ради которого смотрят рекламу (сразу докупается после награды) */
-  const [adPending, setAdPending] = useState<BoosterKind | null>(null);
-  const startAd = useCallback((pending: BoosterKind | null) => {
+  const startAd = useCallback(() => {
     adPlayingRef.current = true;
-    setAdLeft(AD_SECONDS * 1000);
-    setAdDone(false);
     setAdPlaying(true);
-    setAdPending(pending);
   }, []);
   const endAd = useCallback(() => {
     adPlayingRef.current = false;
     setAdPlaying(false);
-    setAdPending(null);
   }, []);
-
-  // отсчёт рекламы: 5 секунд, потом кнопка награды
-  useEffect(() => {
-    if (!adPlaying) return;
-    const started = performance.now();
-    const id = window.setInterval(() => {
-      const left = Math.max(0, AD_SECONDS * 1000 - (performance.now() - started));
-      setAdLeft(left);
-      if (left <= 0) {
-        window.clearInterval(id);
-        setAdDone(true);
-      }
-    }, 100);
-    return () => window.clearInterval(id);
-  }, [adPlaying]);
 
   const getSfx = useCallback((): Sfx => {
     if (!sfxRef.current) sfxRef.current = new Sfx();
@@ -293,11 +277,11 @@ export default function GameScreen({
           boosters: { ...boostersRef.current },
           shopOpen: shopOpenRef.current,
           adPlaying: adPlayingRef.current,
-          adPending,
+          pendingBuy: pendingBuyRef.current,
         };
       };
     }
-  }, [level, adPending]);
+  }, [level]);
 
   // Адаптивный размер canvas
   useEffect(() => {
@@ -737,46 +721,34 @@ export default function GameScreen({
     onUseBooster("plus5");
   }, [boosters.plus5, getSfx, onUseBooster, t]);
 
-  // ── Магазин внутри уровня: покупка, а при нехватке монет — реклама ─────
+  // ── Магазин внутри уровня: покупка строго через подтверждение, ──────
+  // пополнение баланса — отдельная общая кнопка (реклама +N монет)
   const tryBuy = useCallback(
     (kind: BoosterKind) => {
       if (phaseRef.current !== "play") return;
-      const price = PRICES[kind];
-      if (coins >= price) {
-        if (onBuyBooster(kind)) {
-          getSfx().coin();
-          vibrate(12);
-        }
-        return;
-      }
-      // не хватило монет — предлагаем посмотреть рекламу (+adReward)
-      startAd(kind);
+      if (coins < PRICES[kind]) return; // кнопка задизейблена — на всякий случай
+      setPendingBuy(kind);
     },
-    [coins, getSfx, onBuyBooster, startAd],
+    [coins],
   );
 
-  // Награда за просмотренную рекламу; ждущий бустер докупается сразу
+  const confirmBuy = useCallback(() => {
+    const kind = pendingBuyRef.current;
+    if (!kind) return;
+    setPendingBuy(null);
+    if (onBuyBooster(kind)) {
+      getSfx().coin();
+      vibrate(12);
+    }
+  }, [getSfx, onBuyBooster]);
+
+  // Награда за просмотренную рекламу: просто +монет, без автопокупки
   const claimAd = useCallback(() => {
-    if (!adDone) return;
-    const kind = adPending;
-    const newCoins = onAdReward(adReward);
+    onAdReward(adReward);
     getSfx().coin();
     vibrate([15, 30, 15]);
     endAd();
-    if (kind && newCoins >= PRICES[kind] && onBuyBooster(kind)) {
-      const g = gameRef.current;
-      const L = layoutRef.current;
-      g.texts.push({
-        x: L.boardX + (GRID_SIZE / 2) * L.cell,
-        y: L.boardY + 2 * L.cell,
-        text: t.adRewarded(adReward),
-        color: "#ffd34d",
-        size: 18,
-        life: 1.4,
-        maxLife: 1.4,
-      });
-    }
-  }, [adDone, adPending, adReward, endAd, getSfx, onAdReward, onBuyBooster, t]);
+  }, [adReward, endAd, getSfx, onAdReward]);
 
   // закрыть рекламу до конца — без награды
   const abortAd = useCallback(() => {
@@ -927,9 +899,10 @@ export default function GameScreen({
     // задачи снова подсвечиваются после рестарта
     setGoalFlash(true);
     addTimer(window.setTimeout(() => setGoalFlash(false), 4000));
-    // рестарт возможен и из окна победы (<3 звёзд) — закрываем магазин/рекламу
+    // рестарт возможен и из окна победы (<3 звёзд) — закрываем магазин/рекламу/подтверждение
     closeShop();
     endAd();
+    setPendingBuy(null);
   }, [level, closeShop, endAd]);
 
   const goalChips = goalProgressTexts(level, { lines: linesCleared, defused, collected, score }, lang);
@@ -949,6 +922,9 @@ export default function GameScreen({
     firstClear,
   });
 
+  // предмет, ждущий подтверждения покупки (для диалога BuyConfirm)
+  const pendingItem = shopItems.find((s) => s.kind === pendingBuy) ?? null;
+
   const handleNext = () => onLevelEnd(resultPayload(true), true);
   const handleToMap = () => onLevelEnd(resultPayload(phase === "won"), false);
   const handleRetryToMap = () => onLevelEnd(resultPayload(false), false);
@@ -966,12 +942,12 @@ export default function GameScreen({
           >
             <ArrowLeft className="size-4" />
           </button>
-          <div className="flex items-center gap-0.5" aria-label={t.livesAria(lives)}>
+          <div className="flex items-center gap-1" aria-label={t.livesAria(lives)}>
             {[0, 1, 2].map((i) => (
               <Heart
                 key={i}
                 aria-hidden="true"
-                className={`size-4 ${i < lives ? "text-rose-500" : "text-white/15"}`}
+                className={`size-5 ${i < lives ? "text-rose-500" : "text-white/15"}`}
                 fill={i < lives ? "currentColor" : "none"}
               />
             ))}
@@ -986,9 +962,14 @@ export default function GameScreen({
           </button>
         </div>
 
+        {/* Номер уровня: маленькая подпись, чтобы всегда было понятно, где играешь */}
+        <div className="pb-0.5 text-center text-[11px] font-bold uppercase tracking-widest text-white/50">
+          {t.levelNChip(level.n)}
+        </div>
+
         {/* Задачи уровня (1-3): на старте подсвечиваются первые ~4 секунды */}
         <div
-          className="flex flex-wrap items-center justify-center gap-1.5 pb-1"
+          className="flex flex-wrap items-center justify-center gap-2 pb-1.5"
           role="status"
           aria-label={t.goalsAria}
         >
@@ -998,7 +979,7 @@ export default function GameScreen({
             return (
               <div
                 key={`${i}-${gp.label}`}
-                className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-bold ${
+                className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold ${
                   gp.done
                     ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
                     : "border-white/10 bg-white/5 text-white/80"
@@ -1008,16 +989,16 @@ export default function GameScreen({
               >
                 {swatch ? (
                   <span
-                    className="inline-block size-3.5 shrink-0 rounded-[4px]"
+                    className="inline-block size-4 shrink-0 rounded-[4px]"
                     style={{ background: swatch }}
                     aria-hidden="true"
                   />
                 ) : gp.goal.type === "defuse" ? (
-                  <Bomb className="size-4 shrink-0 text-rose-400" aria-hidden="true" />
+                  <Bomb className="size-5 shrink-0 text-rose-400" aria-hidden="true" />
                 ) : gp.goal.type === "score" ? (
-                  <Star className="size-4 shrink-0 text-amber-400" aria-hidden="true" />
+                  <Star className="size-5 shrink-0 text-amber-400" aria-hidden="true" />
                 ) : (
-                  <Flame className="size-4 shrink-0 text-orange-400" aria-hidden="true" />
+                  <Flame className="size-5 shrink-0 text-orange-400" aria-hidden="true" />
                 )}
                 <span className="tabular-nums">
                   {gp.label} {gp.now}/{gp.target}
@@ -1251,7 +1232,8 @@ export default function GameScreen({
               <div className="flex items-center justify-between gap-2">
                 <div className="text-sm font-black uppercase tracking-widest text-white/70">{t.shop}</div>
                 <div
-                  className="flex items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1 text-sm font-black text-amber-300 tabular-nums"
+                  key={coins}
+                  className="score-pop flex items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1 text-sm font-black text-amber-300 tabular-nums"
                   aria-label={t.shopCoinsAria(coins)}
                 >
                   <Coins className="size-4" aria-hidden="true" />
@@ -1292,33 +1274,32 @@ export default function GameScreen({
                       <button
                         type="button"
                         onClick={() => tryBuy(kind)}
-                        aria-label={afford ? t.buyAria(label, price, count) : t.adCtaAria(adReward)}
-                        className={
-                          afford
-                            ? "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-gradient-to-b from-amber-400 to-orange-500 px-3.5 py-2 text-xs font-black text-[#221a08] shadow-md shadow-orange-950/40 transition active:scale-95"
-                            : "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-teal-400/40 bg-teal-400/10 px-3.5 py-2 text-xs font-black text-teal-300 transition active:scale-95 hover:bg-teal-400/20"
-                        }
+                        disabled={!afford}
+                        aria-label={t.buyAria(label, price, count)}
+                        className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-gradient-to-b from-amber-400 to-orange-500 px-3.5 py-2 text-xs font-black text-[#221a08] shadow-md shadow-orange-950/40 transition active:scale-95 disabled:opacity-40"
                       >
-                        {afford ? (
-                          <>
-                            <Coins className="size-3.5" aria-hidden="true" />
-                            {t.buy}
-                          </>
-                        ) : (
-                          <>
-                            <Video className="size-3.5" aria-hidden="true" />
-                            {t.adCta(adReward)}
-                          </>
-                        )}
+                        <Coins className="size-3.5" aria-hidden="true" />
+                        {t.buy}
                       </button>
                     </div>
                   );
                 })}
               </div>
+              {/* одна общая кнопка пополнения: реклама → +монеты, без автопокупки */}
+              <button
+                type="button"
+                onClick={startAd}
+                aria-label={t.topUpAria(adReward)}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-teal-400/40 bg-gradient-to-b from-teal-500/20 to-teal-500/10 py-2.5 text-sm font-black text-teal-300 transition active:scale-95 hover:bg-teal-500/25"
+              >
+                <Video className="size-4" aria-hidden="true" />
+                {t.topUp(adReward)}
+                <span className="text-[11px] font-bold text-teal-300/60">{t.topUpNote}</span>
+              </button>
               <button
                 type="button"
                 onClick={closeShop}
-                className="mt-4 w-full rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-bold text-white/70 transition active:scale-95 hover:bg-white/10"
+                className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-bold text-white/70 transition active:scale-95 hover:bg-white/10"
               >
                 {t.close}
               </button>
@@ -1326,53 +1307,24 @@ export default function GameScreen({
           </div>
         )}
 
-        {/* ── «Реклама» за монеты (демо: сюда позже встанет реальный ролик) ── */}
-        {adPlaying && (
-          <div
-            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/95"
-            role="dialog"
-            aria-modal="true"
-            aria-label={t.adTitle}
-          >
-            <button
-              type="button"
-              onClick={abortAd}
-              aria-label={t.adCloseAria}
-              className="absolute right-4 top-4 rounded-xl border border-white/10 bg-white/5 p-2.5 text-white/60 transition active:scale-90 hover:bg-white/10"
-            >
-              <X className="size-4" />
-            </button>
-            <div className="w-[86%] max-w-xs rounded-2xl border border-white/10 bg-[#14121b] p-5 text-center shadow-2xl">
-              <div className="text-[10px] font-black uppercase tracking-[0.3em] text-white/35">{t.adTitle}</div>
-              <div className="mt-3 grid h-36 place-items-center rounded-xl bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 animate-pulse">
-                <div className="flex flex-col items-center gap-1.5 text-white">
-                  <Bomb className="size-10" aria-hidden="true" />
-                  <div className="text-lg font-black tracking-wide">{t.appName}</div>
-                </div>
-              </div>
-              <div className="mt-3 text-[11px] leading-snug text-white/40">{t.adNote}</div>
-              <div className="mt-4" aria-hidden="true">
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className="h-full rounded-full bg-amber-400"
-                    style={{ width: `${(1 - adLeft / (AD_SECONDS * 1000)) * 100}%` }}
-                  />
-                </div>
-                <div className="mt-1.5 text-xs font-bold tabular-nums text-white/50">
-                  {t.adSeconds(Math.ceil(adLeft / 1000))}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={claimAd}
-                disabled={!adDone}
-                className="mt-4 w-full rounded-xl bg-gradient-to-b from-amber-400 to-orange-500 py-3 text-sm font-black text-[#221a08] shadow-lg shadow-orange-950/50 transition active:scale-95 disabled:opacity-40"
-              >
-                {t.adClaim(adReward)}
-              </button>
-            </div>
-          </div>
+        {/* ── Подтверждение покупки (и в меню, и в игре — один и тот же диалог) ── */}
+        {pendingItem && phase === "play" && !adPlaying && (
+          <BuyConfirm
+            lang={lang}
+            name={pendingItem.label}
+            price={pendingItem.price}
+            count={pendingItem.count}
+            tone={pendingItem.tone}
+            icon={
+              <pendingItem.icon className="size-6 text-white" aria-hidden="true" />
+            }
+            onConfirm={confirmBuy}
+            onCancel={() => setPendingBuy(null)}
+          />
         )}
+
+        {/* ── «Реклама» за монеты (демо: сюда позже встанет реальный ролик) ── */}
+        {adPlaying && <AdOverlay lang={lang} reward={adReward} onClaim={claimAd} onAbort={abortAd} />}
       </main>
     </div>
   );

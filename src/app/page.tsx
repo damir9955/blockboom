@@ -121,6 +121,8 @@ export default function Home() {
           onStart={startLevel}
           onBuy={handleBuy}
           onToggleMute={handleToggleMute}
+          onAdReward={handleAdReward}
+          adReward={AD_COIN_REWARD}
         />
       ) : (
         <GameScreen

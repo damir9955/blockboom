@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bomb, Coins, Hammer, Languages, Lock, Play, Plus, Shuffle, Star, Volume2, VolumeX } from "lucide-react";
+import { Bomb, Coins, Hammer, Languages, Lock, Play, Plus, Shuffle, Star, Video, Volume2, VolumeX } from "lucide-react";
 import { tr, type Lang } from "./i18n";
 import { LEVELS, LEVEL_COUNT, goalHint } from "./levels";
 import { PRICES, totalStars, type BoosterKind, type Progress } from "./progress";
+import AdOverlay from "./AdOverlay";
+import BuyConfirm from "./BuyConfirm";
 
 interface Props {
   progress: Progress;
@@ -13,6 +15,10 @@ interface Props {
   onStart: (n: number) => void;
   onBuy: (kind: BoosterKind) => void;
   onToggleMute: () => void;
+  /** награда за просмотр рекламы; возвращает новый баланс монет */
+  onAdReward: (reward: number) => number;
+  /** сколько монет даёт реклама */
+  adReward: number;
 }
 
 /** Змейка-тропа: 3 узла в ряд, направление чередуется */
@@ -27,11 +33,15 @@ function nodePos(n: number): { x: number; y: number } {
 
 const NODE_H = 92 + Math.ceil(LEVEL_COUNT / 3) * 112;
 
-export default function MapScreen({ progress, lang, onToggleLang, onStart, onBuy, onToggleMute }: Props) {
+export default function MapScreen({ progress, lang, onToggleLang, onStart, onBuy, onToggleMute, onAdReward, adReward }: Props) {
   const t = tr(lang);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const currentRef = useRef<HTMLButtonElement | null>(null);
   const [lockedShake, setLockedShake] = useState(0);
+  // ── Пополнение через рекламу: одна общая кнопка в главном меню ──
+  const [adOpen, setAdOpen] = useState(false);
+  // ── Подтверждение покупки: выбранный предмет ждёт «Купить»/«Отмена» ──
+  const [pendingBuy, setPendingBuy] = useState<BoosterKind | null>(null);
 
   // автоскролл к текущему уровню
   useEffect(() => {
@@ -65,6 +75,9 @@ export default function MapScreen({ progress, lang, onToggleLang, onStart, onBuy
     { kind: "plus5", label: `+${t.plus5}`, icon: Plus, price: PRICES.plus5, count: progress.boosters.plus5, tone: "bg-amber-500" },
   ];
 
+  // предмет, ждущий подтверждения покупки (для диалога BuyConfirm)
+  const pendingItem = boosters.find((b) => b.kind === pendingBuy) ?? null;
+
   return (
     <div className="flex h-[100dvh] w-full flex-col items-center overflow-hidden bg-[#131118] bg-gradient-to-b from-[#1d1828] via-[#141219] to-[#0f0e14] text-white select-none">
       <main className="flex w-full max-w-[420px] flex-1 flex-col overflow-hidden px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-[max(env(safe-area-inset-top),12px)]">
@@ -84,7 +97,8 @@ export default function MapScreen({ progress, lang, onToggleLang, onStart, onBuy
           </div>
           <div className="flex items-center gap-2">
             <div
-              className="flex items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-sm font-black text-amber-300 tabular-nums"
+              key={progress.coins}
+              className="score-pop flex items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-sm font-black text-amber-300 tabular-nums"
               aria-label={t.coinsAria(progress.coins)}
             >
               <Coins className="size-4" aria-hidden="true" />
@@ -195,16 +209,27 @@ export default function MapScreen({ progress, lang, onToggleLang, onStart, onBuy
           </div>
         </div>
 
-        {/* Магазин бустеров */}
+        {/* Магазин бустеров: одна общая кнопка пополнения + покупка через подтверждение */}
         <section className="mt-3" aria-label={t.boosterShopAria}>
-          <div className="grid grid-cols-3 gap-2">
+          {/* пополнение через рекламу — общая кнопка, не привязана к предмету */}
+          <button
+            type="button"
+            onClick={() => setAdOpen(true)}
+            aria-label={t.topUpAria(adReward)}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-teal-400/40 bg-gradient-to-b from-teal-500/20 to-teal-500/10 py-2.5 text-sm font-black text-teal-300 transition active:scale-95 hover:bg-teal-500/25"
+          >
+            <Video className="size-4" aria-hidden="true" />
+            {t.topUp(adReward)}
+            <span className="text-[11px] font-bold text-teal-300/60">{t.topUpNote}</span>
+          </button>
+          <div className="mt-2 grid grid-cols-3 gap-2">
             {boosters.map(({ kind, label, icon: Icon, price, count, tone }) => {
               const afford = progress.coins >= price;
               return (
                 <button
                   key={kind}
                   type="button"
-                  onClick={() => onBuy(kind)}
+                  onClick={() => afford && setPendingBuy(kind)}
                   disabled={!afford}
                   aria-label={t.buyAria(label, price, count)}
                   className="flex flex-col items-center gap-1 rounded-xl border border-white/10 bg-white/5 px-2 py-2.5 transition active:scale-95 hover:bg-white/10 disabled:opacity-40"
@@ -228,6 +253,36 @@ export default function MapScreen({ progress, lang, onToggleLang, onStart, onBuy
           </div>
         </section>
       </main>
+
+      {/* ── Подтверждение покупки (единый диалог с магазином в игре) ── */}
+      {pendingItem && (
+        <BuyConfirm
+          lang={lang}
+          name={pendingItem.label}
+          price={pendingItem.price}
+          count={pendingItem.count}
+          tone={pendingItem.tone}
+          icon={<pendingItem.icon className="size-6 text-white" aria-hidden="true" />}
+          onConfirm={() => {
+            onBuy(pendingItem.kind);
+            setPendingBuy(null);
+          }}
+          onCancel={() => setPendingBuy(null)}
+        />
+      )}
+
+      {/* ── Пополнение через рекламу (тот же оверлей, что и в игре) ── */}
+      {adOpen && (
+        <AdOverlay
+          lang={lang}
+          reward={adReward}
+          onClaim={() => {
+            onAdReward(adReward);
+            setAdOpen(false);
+          }}
+          onAbort={() => setAdOpen(false)}
+        />
+      )}
     </div>
   );
 }
