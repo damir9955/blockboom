@@ -33,27 +33,29 @@ function buildLevels(): LevelDef[] {
     let movesBonus = 0;
     switch (cycle) {
       case 0:
-        goal = { type: "lines", target: clamp(2 + Math.floor(n * 0.36), 2, 16) };
+        goal = { type: "lines", target: clamp(2 + Math.floor(n * 0.22), 2, 10) };
         break;
       case 1:
-        goal = { type: "score", target: clamp(350 + n * 70, 350, 3000) };
-        movesBonus = 2;
+        goal = { type: "score", target: clamp(300 + n * 37, 300, 1600) };
+        movesBonus = 3; // очковым уровням чуть больше воздуха
         break;
       case 2:
-        // цель достижима благодаря подмешиванию цвета в генератор (COLOR_BIAS)
-        goal = { type: "collect", target: clamp(12 + Math.floor(n * 0.32), 12, 24), color: 1 + ((n * 3) % 8) };
+        // цель достижима благодаря подмешиванию цвета в генератор (COLOR_BIAS);
+        // калибровано симуляцией (scripts/sim-hard.ts): проход бота ~55-75%
+        goal = { type: "collect", target: clamp(11 + Math.floor(n * 0.22), 11, 17), color: 1 + ((n * 3) % 8) };
         break;
       case 3:
-        goal = { type: "defuse", target: clamp(1 + Math.floor((n - 1) / 6), 1, 6) };
+        goal = { type: "defuse", target: clamp(1 + Math.floor((n - 1) / 8), 1, 4) };
         break;
       default:
-        goal = { type: "lines", target: clamp(3 + Math.floor(n * 0.36), 3, 16) };
+        goal = { type: "lines", target: clamp(3 + Math.floor(n * 0.22), 3, 10) };
         break;
     }
-    const moves = clamp(24 + wave * 2 + movesBonus, 24, 36);
-    const diff = clamp(0.05 + n * 0.022, 0, 0.95);
-    const bombsFrom = n <= 2 ? Infinity : Math.max(2, 9 - wave);
-    const bombEvery = n <= 2 ? Infinity : Math.max(3, 7 - wave);
+    const moves = clamp(19 + wave * 2 + movesBonus, 19, 33);
+    const diff = clamp(0.05 + n * 0.017, 0, 0.85);
+    // бомбы: со временем появляются раньше и чаще; на очковых уровнях — чуть реже
+    const bombsFrom = n <= 2 ? Infinity : Math.max(3, 10 - wave);
+    const bombEvery = n <= 2 ? Infinity : Math.max(5, 9 - wave) + (cycle === 1 ? 1 : 0);
     out.push({
       n,
       goal,
@@ -65,11 +67,12 @@ function buildLevels(): LevelDef[] {
     });
   }
   // Ручная калибровка первых уровней (туториальная плавность)
-  out[1] = { ...out[1], goal: { type: "lines", target: 3 }, moves: 26 }; // уровень 2
-  out[2] = { ...out[2], goal: { type: "score", target: 600 }, moves: 26 }; // уровень 3
-  out[4] = { ...out[4], goal: { type: "collect", target: 12, color: 2 }, moves: 26 }; // уровень 5
-  out[5] = { ...out[5], goal: { type: "defuse", target: 2 }, moves: 26 }; // уровень 6
-  out[6] = { ...out[6], goal: { type: "lines", target: 5 }, moves: 28 }; // уровень 7
+  out[0] = { ...out[0], goal: { type: "lines", target: 2 }, moves: 16 }; // уровень 1
+  out[1] = { ...out[1], goal: { type: "lines", target: 3 }, moves: 18 }; // уровень 2
+  out[2] = { ...out[2], goal: { type: "score", target: 600 }, moves: 21 }; // уровень 3
+  out[4] = { ...out[4], goal: { type: "collect", target: 12, color: 2 }, moves: 20 }; // уровень 5
+  out[5] = { ...out[5], goal: { type: "defuse", target: 2 }, moves: 20 }; // уровень 6
+  out[6] = { ...out[6], goal: { type: "lines", target: 5 }, moves: 22 }; // уровень 7
   // на уровнях «обезвредь бомбы» бомбы обязаны появляться щедро (после оверрайдов!)
   for (const l of out) {
     if (l.goal.type === "defuse") {

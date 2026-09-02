@@ -12,6 +12,7 @@ import {
   RotateCcw,
   Shuffle,
   Star,
+  Target,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -57,8 +58,9 @@ import {
   type GameState,
   type LayoutMetrics,
 } from "./render";
-import { coinsFor, goalHint, goalProgressText, goalReached, starsFor, type LevelDef } from "./levels";
+import { coinsFor, goalProgressText, goalReached, starsFor, type LevelDef } from "./levels";
 import { tr, type Lang, type Strings } from "./i18n";
+import { markTutSeen, seenTuts, tutForBombs, tutForGoal, tutForPieceBombs, type TutInfo } from "./tutorial";
 import type { BoosterKind } from "./progress";
 
 /** Фитиль тикает по времени: раз в столько секунд простоя */
@@ -157,6 +159,14 @@ export default function GameScreen({
   const [result, setResult] = useState<{ stars: number; coins: number } | null>(null);
   const [showOverlay, setShowOverlay] = useState(false);
   const [armed, setArmed] = useState(false);
+  const [tut, setTut] = useState<TutInfo | null>(null);
+  // туториал открыт → фичи в простое не тикают, ввод заблокирован
+  const tutRef = useRef<TutInfo | null>(null);
+  const seenRef = useRef<Set<string>>(seenTuts());
+  const langRef = useRef(lang);
+  useEffect(() => {
+    langRef.current = lang;
+  }, [lang]);
 
   const getSfx = useCallback((): Sfx => {
     if (!sfxRef.current) sfxRef.current = new Sfx();
@@ -168,16 +178,44 @@ export default function GameScreen({
     timersRef.current.push(id);
   };
 
-  // Инициализация: фигуры сразу
+  // Инициализация: фигуры сразу + туториал цели, если тип цели новый
   useEffect(() => {
     const g = gameRef.current;
     g.pieces = piecesFor(level, g.grid, false);
     refreshDead(g);
+    const info = tutForGoal(level, langRef.current);
+    let tid = 0;
+    if (info && !seenRef.current.has(info.id)) {
+      tid = window.setTimeout(() => {
+        if (seenRef.current.has(info!.id) || phaseRef.current !== "play") return;
+        seenRef.current.add(info!.id);
+        tutRef.current = info!;
+        setTut(info!);
+        vibrate([15, 30, 15]);
+      }, 450);
+    }
     return () => {
+      if (tid) window.clearTimeout(tid);
       timersRef.current.forEach((t) => window.clearTimeout(t));
       timersRef.current = [];
     };
   }, [level]);
+
+  /** Показать мини-окно туториала ПРЯМО СЕЙЧАС (спавн бомбы, фигура-бомба) */
+  const showTutNow = useCallback((info: TutInfo | null) => {
+    if (!info || phaseRef.current !== "play" || seenRef.current.has(info.id)) return;
+    seenRef.current.add(info.id);
+    tutRef.current = info;
+    setTut(info);
+    vibrate([15, 30, 15]);
+  }, []);
+
+  const dismissTut = useCallback(() => {
+    const info = tutRef.current;
+    if (info) markTutSeen(info.id);
+    tutRef.current = null;
+    setTut(null);
+  }, []);
 
   // Синхронизация mute
   useEffect(() => {
@@ -291,7 +329,8 @@ export default function GameScreen({
       const L = layoutRef.current;
       const canvas = canvasRef.current;
       // фитиль горит и по времени: каждые IDLE_BOMB_TICK секунд простоя — тик
-      if (!g.over && g.idleAcc + dt >= IDLE_BOMB_TICK) {
+      // (пока открыто окно туториала — время стоит, чтение не наказывается)
+      if (!g.over && !tutRef.current && g.idleAcc + dt >= IDLE_BOMB_TICK) {
         g.idleAcc = 0;
         const hasBombs =
           boardBombCount(g.grid) > 0 || g.pieces.some((p) => p && p.bombTimer !== null);
@@ -480,6 +519,8 @@ export default function GameScreen({
             spawnBurstAt(g.particles, bx, by, FIRE_COLORS, 6);
             sfx.bombSpawn();
             vibrate([20, 45, 20]);
+            // первая в жизни игрока полевая бомба — объясняем, что это такое
+            showTutNow(tutForBombs(langRef.current));
             g.nextBombAt = g.placements + level.bombEvery;
           } else {
             g.nextBombAt = g.placements + 1;
@@ -490,6 +531,10 @@ export default function GameScreen({
       // 5. пополнение лотка
       if (g.pieces.every((p) => p === null)) {
         g.pieces = piecesFor(level, g.grid, level.pieceBombs && g.placements >= 6);
+        // первая фигура-бомба в лотке — объясняем механику
+        if (g.pieces.some((p) => p && p.bomb !== null)) {
+          showTutNow(tutForPieceBombs(langRef.current));
+        }
       }
       refreshDead(g);
 
@@ -520,7 +565,7 @@ export default function GameScreen({
       setDefused(g.defused);
       setCollected(g.collected);
     },
-    [getSfx, level, winLevel, loseLevel, t],
+    [getSfx, level, winLevel, loseLevel, t, showTutNow],
   );
 
   const getPos = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -601,6 +646,9 @@ export default function GameScreen({
     if (phaseRef.current !== "play" || boosters.shuffle <= 0) return;
     const fresh = piecesFor(level, g.grid, level.pieceBombs && g.placements >= 6);
     g.pieces = g.pieces.map((p, i) => (p ? fresh[i] : null));
+    if (g.pieces.some((p) => p && p.bomb !== null)) {
+      showTutNow(tutForPieceBombs(langRef.current));
+    }
     refreshDead(g);
     const L = layoutRef.current;
     for (let i = 0; i < 3; i++) {
@@ -609,7 +657,7 @@ export default function GameScreen({
     getSfx().shuffle();
     vibrate(15);
     onUseBooster("shuffle");
-  }, [boosters.shuffle, getSfx, level, onUseBooster]);
+  }, [boosters.shuffle, getSfx, level, onUseBooster, showTutNow]);
 
   // +5 ходов
   const usePlus5 = useCallback(() => {
@@ -638,7 +686,7 @@ export default function GameScreen({
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const g = gameRef.current;
-    if (phaseRef.current !== "play") return;
+    if (phaseRef.current !== "play" || tutRef.current) return;
     const { x, y } = getPos(e);
     const L = layoutRef.current;
     // молоток взведён — тап по блоку сносит его
@@ -683,6 +731,7 @@ export default function GameScreen({
 
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const g = gameRef.current;
+    if (tutRef.current) return;
     const { x, y } = getPos(e);
     if (g.armed) {
       const cell = cellAt(x, y);
@@ -715,7 +764,7 @@ export default function GameScreen({
 
   const onPointerUp = () => {
     const g = gameRef.current;
-    if (g.armed) return;
+    if (g.armed || tutRef.current) return;
     if (!g.drag) return;
     const d = g.drag;
     g.drag = null;
@@ -739,6 +788,11 @@ export default function GameScreen({
   // Рестарт уровня
   const restart = useCallback(() => {
     const g = gameRef.current;
+    const tutOpen = tutRef.current !== null;
+    if (tutOpen) {
+      tutRef.current = null;
+      setTut(null);
+    }
     g.grid = emptyGrid();
     g.pieces = piecesFor(level, g.grid, false);
     g.dead = [false, false, false];
@@ -971,6 +1025,42 @@ export default function GameScreen({
               </div>
             </div>
           )}
+
+          {/* Мини-окно туториала: объясняет механику в момент её первого появления */}
+          {tut && phase === "play" && (
+            <div
+              className="absolute inset-0 z-20 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+              role="dialog"
+              aria-modal="true"
+              aria-label={tut.title}
+            >
+              <div className="tut-pop w-[86%] max-w-xs rounded-2xl border border-amber-400/25 bg-[#1c1a24] p-5 text-center shadow-2xl">
+                <div className="mx-auto flex size-12 items-center justify-center rounded-full border border-white/10 bg-gradient-to-b from-amber-400/20 to-orange-500/20">
+                  {tut.id === "goal-lines" ? (
+                    <Flame className="size-6 text-orange-400" aria-hidden="true" />
+                  ) : tut.id === "goal-score" ? (
+                    <Star className="size-6 text-amber-400" aria-hidden="true" />
+                  ) : tut.id === "goal-collect" ? (
+                    <Target className="size-6 text-emerald-400" aria-hidden="true" />
+                  ) : (
+                    <Bomb className="size-6 text-rose-400" aria-hidden="true" />
+                  )}
+                </div>
+                <div className="mt-3 text-[10px] font-black uppercase tracking-widest text-amber-400/80">
+                  {t.tutBadge}
+                </div>
+                <div className="mt-1 text-lg font-black text-white">{tut.title}</div>
+                <p className="mt-2 text-xs leading-relaxed text-white/60">{tut.body}</p>
+                <button
+                  type="button"
+                  onClick={dismissTut}
+                  className="mt-4 w-full rounded-xl bg-gradient-to-b from-amber-400 to-orange-500 py-2.5 text-sm font-black text-[#221a08] shadow-lg shadow-orange-950/50 transition active:scale-95"
+                >
+                  {t.tutGotIt}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Бустеры */}
@@ -1025,12 +1115,6 @@ export default function GameScreen({
             )}
           </button>
         </div>
-
-        {/* Подсказка цели */}
-        <p className="mt-auto pt-3 text-center text-[11px] leading-relaxed text-white/30">
-          {goalHint(level, lang)}
-          {Number.isFinite(level.bombsFrom) ? t.bombHint : ""}
-        </p>
       </main>
     </div>
   );

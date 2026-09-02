@@ -181,17 +181,21 @@ export function difficultyOf(score: number): number {
   return Math.min(1, score / 2500);
 }
 
-/** Доля фигур цвета цели на collect-уровнях (подмешивается в генерацию) */
-export const COLOR_BIAS = 0.4;
+/** Доля фигур цвета цели на collect-уровнях (подмешивается в генерацию).
+ *  Подобрана симуляцией: цель выпадает ~34% против ~12% у остальных — заметно,
+ *  но не решает уровень за игрока (жёлтые не должны «сыпаться»). */
+export const COLOR_BIAS = 0.25;
 
 /** Тройка новых фигур; гарантирует, что хотя бы одна влезает на поле.
  *  colorBias — цвет цели collect-уровня: фигуры этого цвета выпадают заметно чаще,
- *  иначе цель "собери N блоков цвета" математически недостижима. */
+ *  иначе цель "собери N блоков цвета" математически недостижима.
+ *  biasStrength — доля фигур цвета цели (по умолчанию COLOR_BIAS, для калибровки в симуляциях). */
 export function generatePieces(
   grid: Grid,
   difficulty: number,
   allowBomb = false,
   colorBias?: number,
+  biasStrength: number = COLOR_BIAS,
 ): Piece[] {
   const t = Math.max(0, Math.min(1, difficulty));
   const smallBias = 1 - 0.5 * t;
@@ -214,7 +218,7 @@ export function generatePieces(
       colorBias !== undefined &&
       colorBias >= 1 &&
       colorBias <= COLOR_COUNT &&
-      Math.random() < COLOR_BIAS
+      Math.random() < biasStrength
     ) {
       return colorBias;
     }

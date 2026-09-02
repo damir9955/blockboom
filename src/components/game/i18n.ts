@@ -74,7 +74,17 @@ export interface Strings {
   shuffleAria: (n: number) => string;
   plus5Aria: (n: number) => string;
   // подсказки
-  bombHint: string;
+  // туториалы новых механик (мини-окна при первом появлении)
+  tutBadge: string;
+  tutGotIt: string;
+  tutLinesTitle: string;
+  tutScoreTitle: string;
+  tutCollectTitle: string;
+  tutDefuseTitle: string;
+  tutBombsTitle: string;
+  tutBombsBody: string;
+  tutPieceBombsTitle: string;
+  tutPieceBombsBody: string;
   // цели (levels.ts)
   goalLines: string;
   goalScore: string;
@@ -137,8 +147,18 @@ const ru: Strings = {
   hammerAria: (n) => `Молоток: разбить один блок, осталось ${n}`,
   shuffleAria: (n) => `Перемешать фигуры в лотке, осталось ${n}`,
   plus5Aria: (n) => `Пять дополнительных ходов, осталось ${n}`,
-  bombHint:
-    ". Бомбы появляются сами: закрой бомбу линией, пока фитиль не догорел — взрыв отнимает жизнь",
+  tutBadge: "НОВАЯ МЕХАНИКА",
+  tutGotIt: "Понятно",
+  tutLinesTitle: "Взорви линии",
+  tutScoreTitle: "Набери очки",
+  tutCollectTitle: "Собери цвет",
+  tutDefuseTitle: "Обезвредь бомбы",
+  tutBombsTitle: "Бомба на поле!",
+  tutBombsBody:
+    "Тёмный шар с фитилём и цифрой — это бомба. Цифра показывает, сколько ходов (или тиков простоя по 10 секунд) до взрыва. Взрыв отнимает жизнь и выжигает область 3×3. Закрой бомбу полной линией — она обезвредится и даст +100 очков.",
+  tutPieceBombsTitle: "Фигура с бомбой",
+  tutPieceBombsBody:
+    "Теперь бомба может прилететь и внутри фигуры в лотке. Поставь её на поле — бомба начнёт тикать. Успей закрыть её линией, иначе бабах!",
   goalLines: "Линии",
   goalScore: "Очки",
   goalDefuse: "Обезвредь",
@@ -198,8 +218,18 @@ const en: Strings = {
   hammerAria: (n) => `Hammer: smash one block, ${n} left`,
   shuffleAria: (n) => `Shuffle the tray pieces, ${n} left`,
   plus5Aria: (n) => `Five extra moves, ${n} left`,
-  bombHint:
-    ". Bombs appear on their own: cover a bomb with a line before its fuse burns out — every blast costs a life",
+  tutBadge: "NEW MECHANIC",
+  tutGotIt: "Got it",
+  tutLinesTitle: "Blast lines",
+  tutScoreTitle: "Score points",
+  tutCollectTitle: "Collect the color",
+  tutDefuseTitle: "Defuse the bombs",
+  tutBombsTitle: "A bomb on the board!",
+  tutBombsBody:
+    "The dark ball with a fuse and a number is a bomb. The number shows how many moves (or 10-second idle ticks) are left before it blows. An explosion costs a life and burns a 3×3 area. Cover the bomb with a full line to defuse it and earn +100 points.",
+  tutPieceBombsTitle: "Piece with a bomb",
+  tutPieceBombsBody:
+    "A bomb can now arrive inside a tray piece. Place it on the board and the bomb starts ticking. Cover it with a line in time, or boom!",
   goalLines: "Lines",
   goalScore: "Score",
   goalDefuse: "Defuse",

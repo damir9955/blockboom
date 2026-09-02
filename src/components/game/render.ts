@@ -175,7 +175,9 @@ export function drawBlock(
   ctx.restore();
 }
 
-/** Бомба: тёмный блок с фитилём и таймером */
+/** Бомба: пульсирующий тёмный ШАР с капсюлем, видимым ФИТИЛЁМ, искрой и таймером.
+ *  Пульсирует ВСЕГДА (спокойно ~0.9 Гц; при таймере ≤ 2 — быстро и с красным свечением),
+ *  фаза phase рассинхронизирует бомбы на поле, чтобы не пульсировали хором. */
 export function drawBombBlock(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -184,38 +186,100 @@ export function drawBombBlock(
   timer: number,
   time: number,
   alpha = 1,
+  phase = 0,
 ): void {
-  const pad = s * 0.05;
-  const r = s * 0.22;
   const urgent = timer <= 2;
-  const pulse = urgent ? 1 + 0.07 * Math.sin(time * 12) : 1;
-  const size = (s - pad * 2) * pulse;
-  const bx = x + (s - size) / 2;
-  const by = y + (s - size) / 2;
+  const pulse = urgent ? 1 + 0.09 * Math.sin(time * 13 + phase) : 1 + 0.045 * Math.sin(time * 4.5 + phase);
   ctx.save();
   ctx.globalAlpha = alpha;
-  const grad = ctx.createLinearGradient(0, by, 0, by + size);
-  grad.addColorStop(0, "#4a4457");
-  grad.addColorStop(1, "#221d2c");
+
+  // подложка-клетка (чтобы бомба не «плавала» в пустоте сетки)
+  ctx.fillStyle = urgent ? "#241318" : "#181420";
+  roundRect(ctx, x + s * 0.05, y + s * 0.05, s * 0.9, s * 0.9, s * 0.18);
+  ctx.fill();
+
+  // корпус: шар с бликом
+  const R = s * 0.34 * pulse;
+  const cx = x + s / 2;
+  const cy = y + s * 0.62;
+  const grad = ctx.createRadialGradient(cx - R * 0.35, cy - R * 0.45, R * 0.1, cx, cy, R);
+  grad.addColorStop(0, "#5a5266");
+  grad.addColorStop(0.55, "#2c2436");
+  grad.addColorStop(1, "#161122");
   ctx.fillStyle = grad;
-  roundRect(ctx, bx, by, size, size, r);
-  ctx.fill();
-  ctx.strokeStyle = urgent ? "rgba(255,90,60,0.95)" : "rgba(255,255,255,0.14)";
-  ctx.lineWidth = Math.max(1.5, s * 0.045);
-  roundRect(ctx, bx, by, size, size, r);
-  ctx.stroke();
-  // искра на фитиле
-  ctx.fillStyle = urgent ? "#ffd34d" : "#ffb14d";
   ctx.beginPath();
-  const sparkR = s * (urgent ? 0.075 + 0.02 * Math.abs(Math.sin(time * 10)) : 0.06);
-  ctx.arc(x + s / 2, by + size * 0.22, sparkR, 0, Math.PI * 2);
+  ctx.arc(cx, cy, R, 0, Math.PI * 2);
   ctx.fill();
-  // таймер
+  ctx.strokeStyle = urgent ? "rgba(255,90,60,0.95)" : "rgba(255,255,255,0.16)";
+  ctx.lineWidth = Math.max(1.2, s * 0.04);
+  ctx.stroke();
+  // блик
+  ctx.fillStyle = "rgba(255,255,255,0.22)";
+  ctx.beginPath();
+  ctx.ellipse(cx - R * 0.38, cy - R * 0.48, R * 0.32, R * 0.2, -0.6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // красное свечение при догорающем фитиле
+  if (urgent) {
+    const glow = 0.35 + 0.3 * Math.sin(time * 13 + phase);
+    ctx.strokeStyle = `rgba(255,60,40,${glow.toFixed(3)})`;
+    ctx.lineWidth = Math.max(1.5, s * 0.05);
+    ctx.beginPath();
+    ctx.arc(cx, cy, R + s * 0.09, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // капсюль (горлышко) на верхушке шара
+  const capW = s * 0.2;
+  const capH = s * 0.09;
+  const capX = cx - capW / 2;
+  const capY = cy - R - capH * 0.8;
+  ctx.fillStyle = "#6b6478";
+  roundRect(ctx, capX, capY, capW, capH, s * 0.03);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(0,0,0,0.4)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // ФИТИЛЬ: изогнутый шнур от капсюля вверх-вбок
+  const fx0 = cx;
+  const fy0 = capY;
+  const fx1 = cx + s * 0.2;
+  const fy1 = y + s * 0.1;
+  ctx.strokeStyle = "#d9c9a3";
+  ctx.lineWidth = Math.max(1.5, s * 0.05);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(fx0, fy0);
+  ctx.quadraticCurveTo(cx + s * 0.04, y + s * 0.12, fx1, fy1);
+  ctx.stroke();
+
+  // ИСКРА на конце фитиля — мерцает всегда, при опасности красно-оранжевая
+  const flick = Math.abs(Math.sin(time * (urgent ? 16 : 9) + phase));
+  const sparkR = s * (0.055 + 0.045 * flick);
+  const sparkGrad = ctx.createRadialGradient(fx1, fy1, 0, fx1, fy1, sparkR * 2.2);
+  sparkGrad.addColorStop(0, "#ffffff");
+  sparkGrad.addColorStop(0.4, urgent ? "#ff8a4d" : "#ffd34d");
+  sparkGrad.addColorStop(1, "rgba(255,120,40,0)");
+  ctx.fillStyle = sparkGrad;
+  ctx.beginPath();
+  ctx.arc(fx1, fy1, sparkR * 2.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = urgent ? "#ffb14d" : "#fff3b0";
+  ctx.beginPath();
+  ctx.arc(fx1, fy1, sparkR * 0.55, 0, Math.PI * 2);
+  ctx.fill();
+
+  // таймер — крупная цифра на шаре
   ctx.fillStyle = urgent ? "#ff6a4d" : "#f4f0ff";
-  ctx.font = `900 ${Math.round(s * 0.42)}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+  ctx.font = `900 ${Math.round(s * 0.4)}px system-ui, -apple-system, "Segoe UI", sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(String(Math.max(0, timer)), x + s / 2, y + s / 2 + s * 0.06);
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "rgba(0,0,0,0.55)";
+  ctx.lineWidth = Math.max(2, s * 0.07);
+  ctx.strokeText(String(Math.max(0, timer)), cx, cy);
+  ctx.fillText(String(Math.max(0, timer)), cx, cy);
   ctx.restore();
 }
 
@@ -239,7 +303,7 @@ export function drawPieceAt(
     const x = x0 + dc * cell * scale;
     const y = y0 + dr * cell * scale;
     if (piece.bomb === i && piece.bombTimer !== null) {
-      drawBombBlock(ctx, x, y, cell * scale, piece.bombTimer, time, alpha);
+      drawBombBlock(ctx, x, y, cell * scale, piece.bombTimer, time, alpha, i * 1.3);
     } else {
       drawBlock(ctx, x, y, cell * scale, piece.color, alpha, goalColor === piece.color);
     }
@@ -277,7 +341,7 @@ export function drawBoard(ctx: CanvasRenderingContext2D, g: GameState, L: Layout
         }
         const off = (1 - sc) * L.cell / 2;
         if (v < 0) {
-          drawBombBlock(ctx, x + off, y + off, L.cell * sc, -v, g.time, 1);
+          drawBombBlock(ctx, x + off, y + off, L.cell * sc, -v, g.time, 1, r * 0.9 + c * 1.7);
         } else {
           drawBlock(ctx, x + off, y + off, L.cell * sc, v, 1, g.goalColor === v);
         }
