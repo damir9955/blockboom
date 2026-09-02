@@ -1,11 +1,14 @@
 import type { MetadataRoute } from "next";
 
+// обязательное для output: "export" (статический экспорт в Android-обёртку)
+export const dynamic = "force-static";
+
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Block Boom — Blast Block Puzzle",
     short_name: "Block Boom",
     description:
-      "40 explosive levels: goals, move limits, ticking bombs, stars, coins and boosters. Play offline with one hand.",
+      "50 explosive levels: goals, move limits, ticking bombs, stars, coins and boosters. Play offline with one hand.",
     start_url: "/",
     scope: "/",
     display: "standalone",

@@ -1,6 +1,6 @@
 // ── Отрисовка на canvas: поле, блоки, частицы, тексты ──────────────────────
 
-import { BLOCK_COLORS, GRID_SIZE, IDLE_BOMB_TICK, isStone, type Grid, type Piece } from "./engine";
+import { BLOCK_COLORS, GRID_SIZE, IDLE_BOMB_TICK, isStone, stoneDamage, type Grid, type Piece } from "./engine";
 
 export const TRAY_SCALE = 0.55;
 
@@ -333,36 +333,49 @@ export function drawBombBlock(
   ctx.restore();
 }
 
-/** Камень-препятствие: тёмный гранит с фаской и трещинами. Линией не смывается —
- *  только взрыв бомбы (кратер 3×3) или молоток. */
+/** Камень-препятствие: тёмный гранит с фаской. damage: 0 — целый, 1 — трещина,
+ *  2 — сеть трещин (темнее, со сколами). Разрушение — 3-й удар линии,
+ *  кратер бомбы и молоток сносят сразу. */
 export function drawStoneBlock(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
   s: number,
   alpha = 1,
+  damage = 0,
 ): void {
   const pad = s * 0.05;
   const r = s * 0.18;
   const w = s - pad * 2;
   ctx.save();
   ctx.globalAlpha = alpha;
+  // база: чем сильнее damage, тем темнее и «мёртвее» камень
   const grad = ctx.createLinearGradient(0, y, 0, y + s);
-  grad.addColorStop(0, "#8d93a3");
-  grad.addColorStop(0.5, "#6b7280");
-  grad.addColorStop(1, "#4b5563");
+  if (damage >= 2) {
+    grad.addColorStop(0, "#787f8e");
+    grad.addColorStop(0.5, "#565d68");
+    grad.addColorStop(1, "#3a414c");
+  } else if (damage === 1) {
+    grad.addColorStop(0, "#83899a");
+    grad.addColorStop(0.5, "#616877");
+    grad.addColorStop(1, "#424a56");
+  } else {
+    grad.addColorStop(0, "#8d93a3");
+    grad.addColorStop(0.5, "#6b7280");
+    grad.addColorStop(1, "#4b5563");
+  }
   ctx.fillStyle = grad;
   roundRect(ctx, x + pad, y + pad, w, w, r);
   ctx.fill();
   ctx.strokeStyle = "rgba(0,0,0,0.4)";
   ctx.lineWidth = Math.max(1, s * 0.05);
   ctx.stroke();
-  // верхняя фаска
-  ctx.fillStyle = "rgba(255,255,255,0.16)";
+  // верхняя фаска (у побитого камня — меньше, «осыпается»)
+  ctx.fillStyle = `rgba(255,255,255,${damage >= 2 ? 0.07 : damage === 1 ? 0.11 : 0.16})`;
   roundRect(ctx, x + pad + w * 0.08, y + pad + w * 0.07, w * 0.84, w * 0.24, r * 0.55);
   ctx.fill();
   // трещины
-  ctx.strokeStyle = "rgba(15,14,20,0.6)";
+  ctx.strokeStyle = "rgba(15,14,20,0.62)";
   ctx.lineWidth = Math.max(1, s * 0.035);
   ctx.lineCap = "round";
   ctx.beginPath();
@@ -372,6 +385,46 @@ export function drawStoneBlock(
   ctx.moveTo(x + s * 0.63, y + s * 0.28);
   ctx.lineTo(x + s * 0.58, y + s * 0.5);
   ctx.stroke();
+  // damage >= 1: главная сквозная трещина через весь камень
+  if (damage >= 1) {
+    ctx.strokeStyle = "rgba(10,9,14,0.8)";
+    ctx.lineWidth = Math.max(1.5, s * 0.05);
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.2, y + s * 0.16);
+    ctx.lineTo(x + s * 0.38, y + s * 0.42);
+    ctx.lineTo(x + s * 0.3, y + s * 0.64);
+    ctx.lineTo(x + s * 0.52, y + s * 0.88);
+    ctx.stroke();
+  }
+  // damage >= 2: сеть трещин + сколотые углы
+  if (damage >= 2) {
+    ctx.strokeStyle = "rgba(10,9,14,0.7)";
+    ctx.lineWidth = Math.max(1, s * 0.04);
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.82, y + s * 0.24);
+    ctx.lineTo(x + s * 0.62, y + s * 0.48);
+    ctx.lineTo(x + s * 0.78, y + s * 0.7);
+    ctx.moveTo(x + s * 0.62, y + s * 0.48);
+    ctx.lineTo(x + s * 0.44, y + s * 0.34);
+    ctx.moveTo(x + s * 0.5, y + s * 0.8);
+    ctx.lineTo(x + s * 0.7, y + s * 0.9);
+    ctx.stroke();
+    // сколы на кромках
+    ctx.fillStyle = "rgba(20,19,26,0.55)";
+    ctx.beginPath();
+    ctx.moveTo(x + pad, y + pad + s * 0.16);
+    ctx.lineTo(x + pad + s * 0.16, y + pad);
+    ctx.lineTo(x + pad + s * 0.3, y + pad + s * 0.05);
+    ctx.lineTo(x + pad + s * 0.08, y + pad + s * 0.26);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x + pad + w - s * 0.02, y + pad + w - s * 0.16);
+    ctx.lineTo(x + pad + w - s * 0.18, y + pad + w);
+    ctx.lineTo(x + pad + w - s * 0.34, y + pad + w - s * 0.04);
+    ctx.closePath();
+    ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -436,7 +489,7 @@ export function drawBoard(ctx: CanvasRenderingContext2D, g: GameState, L: Layout
         if (v < 0) {
           drawBombBlock(ctx, x + off, y + off, L.cell * sc, -v, g.time, 1, r * 0.9 + c * 1.7, idleRing(g));
         } else if (isStone(v)) {
-          drawStoneBlock(ctx, x, y, L.cell);
+          drawStoneBlock(ctx, x, y, L.cell, 1, stoneDamage(v));
         } else {
           drawBlock(ctx, x + off, y + off, L.cell * sc, v, 1, g.goalColor === v);
         }
@@ -519,6 +572,9 @@ export function drawTray(ctx: CanvasRenderingContext2D, g: GameState, L: LayoutM
 
 /** Палитра огня для взрывов бомб */
 export const FIRE_COLORS = ["#ff7a3d", "#ffc23d", "#ff4d4d", "#ffffff"];
+
+/** Палитра каменной крошки: удары линии трещат камнем, разрушение — осколки */
+export const STONE_COLORS = ["#c3c9d4", "#9aa2b0", "#6b7280", "#3a414c"];
 
 /** Взрыв частиц в точке (x, y) */
 export function spawnBurstAt(

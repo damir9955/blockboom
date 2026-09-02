@@ -5,6 +5,7 @@ import { Bomb, Coins, Hammer, Languages, Lock, Play, Plus, Shuffle, Star, Video,
 import { tr, type Lang } from "./i18n";
 import { LEVELS, LEVEL_COUNT, goalHint } from "./levels";
 import { PRICES, totalStars, type BoosterKind, type Progress } from "./progress";
+import { nativeAdsAvailable, showRewardedAd } from "./ads";
 import AdOverlay from "./AdOverlay";
 import BuyConfirm from "./BuyConfirm";
 
@@ -40,6 +41,30 @@ export default function MapScreen({ progress, lang, onToggleLang, onStart, onBuy
   const [lockedShake, setLockedShake] = useState(0);
   // ── Пополнение через рекламу: одна общая кнопка в главном меню ──
   const [adOpen, setAdOpen] = useState(false);
+  // ── нативная реклама (Android): ролик Яндекса вместо демо-оверлея ──
+  const [adBusy, setAdBusy] = useState(false);
+  const [adError, setAdError] = useState(false);
+  const adErrorTimer = useRef(0);
+
+  // пополнение: в приложении — ролик Яндекса, на сайте — демо-оверлей
+  const topUp = () => {
+    if (adOpen || adBusy) return;
+    if (nativeAdsAvailable()) {
+      setAdBusy(true);
+      void showRewardedAd().then((res) => {
+        setAdBusy(false);
+        if (res === "rewarded") {
+          onAdReward(adReward);
+        } else if (res === "failed") {
+          setAdError(true);
+          window.clearTimeout(adErrorTimer.current);
+          adErrorTimer.current = window.setTimeout(() => setAdError(false), 3500);
+        }
+      });
+    } else {
+      setAdOpen(true);
+    }
+  };
   // ── Подтверждение покупки: выбранный предмет ждёт «Купить»/«Отмена» ──
   const [pendingBuy, setPendingBuy] = useState<BoosterKind | null>(null);
 
@@ -212,9 +237,14 @@ export default function MapScreen({ progress, lang, onToggleLang, onStart, onBuy
         {/* Магазин бустеров: одна общая кнопка пополнения + покупка через подтверждение */}
         <section className="mt-3" aria-label={t.boosterShopAria}>
           {/* пополнение через рекламу — общая кнопка, не привязана к предмету */}
+          {adError && (
+            <div className="mb-1 text-center text-[11px] font-bold text-rose-300/90" role="status">
+              {t.adUnavailable}
+            </div>
+          )}
           <button
             type="button"
-            onClick={() => setAdOpen(true)}
+            onClick={topUp}
             aria-label={t.topUpAria(adReward)}
             className="flex w-full items-center justify-center gap-2 rounded-xl border border-teal-400/40 bg-gradient-to-b from-teal-500/20 to-teal-500/10 py-2.5 text-sm font-black text-teal-300 transition active:scale-95 hover:bg-teal-500/25"
           >
@@ -282,6 +312,19 @@ export default function MapScreen({ progress, lang, onToggleLang, onStart, onBuy
           }}
           onAbort={() => setAdOpen(false)}
         />
+      )}
+
+      {/* ── нативный ролик Яндекса: пока грузится/идёт — заглушка ── */}
+      {adBusy && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="rounded-2xl border border-white/10 bg-[#1c1a24] px-6 py-4 text-sm font-bold text-white/80 shadow-2xl">
+            {t.adLoading}
+          </div>
+        </div>
       )}
     </div>
   );

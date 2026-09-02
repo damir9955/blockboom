@@ -128,6 +128,18 @@ export class Sfx {
     this.tone(700, 0.04, "square", 0.05);
   }
 
+  /** Камень треснул от удара линии (destroyed — окончательно рассыпался) */
+  stoneCrack(destroyed = false): void {
+    if (destroyed) {
+      this.tone(170, 0.12, "triangle", 0.16, 0, 55);
+      this.tone(75, 0.18, "sine", 0.13, 0.05, 38);
+      this.tone(240, 0.06, "square", 0.04, 0.02);
+    } else {
+      this.tone(210, 0.07, "triangle", 0.13, 0, 95);
+      this.tone(95, 0.09, "sine", 0.09, 0.03, 55);
+    }
+  }
+
   /** Перемешивание лотка */
   shuffle(): void {
     this.tone(300, 0.16, "sawtooth", 0.03, 0, 900);

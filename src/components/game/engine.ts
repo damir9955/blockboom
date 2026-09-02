@@ -7,12 +7,34 @@ export const COLOR_COUNT = 8;
  *  вокруг бомбы делает ровно один оборот за этот период). */
 export const IDLE_BOMB_TICK = 7;
 
-/** Камень-препятствие: занимает клетку, считается «заполненным» для линий,
- *  но НЕ уничтожается взрывом линий — только кратером бомбы или молотком. */
+/** Камень-препятствие с прочностью 3: целый → с трещиной → сеть трещин → разрушен.
+ *  Занимает клетку, считается «заполненным» для линий. Удар линии (смытие) снимает
+ *  1 прочность — полное разрушение с 3-го раза; кратер бомбы и молоток сносят сразу.
+ *  Значения в сетке: 99 = целый, 98 = трещина, 97 = сеть трещин. */
 export const STONE = 99;
+export const STONE_CRACKED = 98;
+export const STONE_HEAVY = 97;
+export const STONE_MIN = 97;
 
 export function isStone(v: number): boolean {
-  return v === STONE;
+  return v >= STONE_MIN && v <= STONE;
+}
+
+/** Стадия повреждения камня: 0 — целый, 1 — трещина, 2 — сеть трещин */
+export function stoneDamage(v: number): number {
+  return isStone(v) ? STONE - v : 0;
+}
+
+/** Удар по камню: −1 прочность (99→98→97→разрушен). true — камень разрушен, клетка пустеет */
+export function hitStone(grid: Grid, r: number, c: number): boolean {
+  const v = grid[r][c];
+  if (!isStone(v)) return false;
+  if (v > STONE_MIN) {
+    grid[r][c] = v - 1;
+    return false;
+  }
+  grid[r][c] = 0;
+  return true;
 }
 
 /** 0 = пусто, 1..COLOR_COUNT = id цвета блока */
@@ -166,12 +188,12 @@ export interface ScoreResult {
   streakMult: number;
 }
 
-/** Очки за взрыв линий: 10 за клетку, множитель за несколько линий и серию */
+/** Очки за взрыв линий: 12 за клетку, множитель за несколько линий и серию */
 export function clearScore(lines: number, cellsCleared: number, streak: number): ScoreResult {
   const lineMult = lines === 1 ? 1 : lines === 2 ? 2 : lines === 3 ? 4 : 6;
   const streakMult = 1 + 0.1 * Math.min(streak, 10);
   return {
-    total: Math.round(cellsCleared * 10 * lineMult * streakMult),
+    total: Math.round(cellsCleared * 12 * lineMult * streakMult),
     lineMult,
     streakMult,
   };
@@ -363,7 +385,8 @@ export function applyHammer(grid: Grid, r: number, c: number): number {
 }
 
 /** Расставить камни-препятствия на пустых клетках (стартовая раскладка уровня).
- *  Камни усложняют поле: их нельзя смыть линией — только взорвать бомбой/молотком. */
+ *  Камни усложняют поле: линия бьёт их (3 удара на разрушение), взрыв бомбы
+ *  и молоток сносят сразу. */
 export function spawnStones(grid: Grid, count: number): [number, number][] {
   const placed: [number, number][] = [];
   let guard = 0;

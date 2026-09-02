@@ -31,11 +31,13 @@ import {
   fullLines,
   generatePieces,
   GRID_SIZE,
+  hitStone,
   IDLE_BOMB_TICK,
   isStone,
   MAX_BOARD_BOMBS,
   spawnBoardBomb,
   spawnStones,
+  STONE_MIN,
   tickBoardBombs,
   type Grid,
   type Piece,
@@ -56,6 +58,7 @@ import {
   idleRing,
   spawnBurst,
   spawnBurstAt,
+  STONE_COLORS,
   TRAY_SCALE,
   updateParticles,
   updateTexts,
@@ -66,6 +69,7 @@ import {
 import { coinsFor, collectGoal, goalProgressTexts, goalReached, scoreMultiplier, starsFor, type LevelDef } from "./levels";
 import { tr, type Lang, type Strings } from "./i18n";
 import { PRICES, type BoosterKind } from "./progress";
+import { nativeAdsAvailable, showRewardedAd } from "./ads";
 import AdOverlay from "./AdOverlay";
 import BuyConfirm from "./BuyConfirm";
 
@@ -203,6 +207,10 @@ export default function GameScreen({
   // без автопокупки — игрок сам решает, на что копить)
   const [adPlaying, setAdPlaying] = useState(false);
   const adPlayingRef = useRef(false);
+  // нативная реклама (Android): вместо демо-оверлея — ролик Yandex Mobile Ads
+  const [nativeAd, setNativeAd] = useState(false);
+  const [adError, setAdError] = useState(false);
+  const adErrorTimer = useRef(0);
   const startAd = useCallback(() => {
     adPlayingRef.current = true;
     setAdPlaying(true);
@@ -210,7 +218,11 @@ export default function GameScreen({
   const endAd = useCallback(() => {
     adPlayingRef.current = false;
     setAdPlaying(false);
+    setNativeAd(false);
   }, []);
+
+  // пополнение: в приложении — настоящий ролик Яндекса, на сайте — демо
+  // (topUp объявлен ниже — после claimAd, которым выдаётся награда)
 
   const getSfx = useCallback((): Sfx => {
     if (!sfxRef.current) sfxRef.current = new Sfx();
@@ -365,8 +377,10 @@ export default function GameScreen({
       const canvas = canvasRef.current;
       // фитиль горит и по времени: каждые IDLE_BOMB_TICK (7) секунд простоя — тик;
       // сгорающее кольцо вокруг бомбы делает ровно один оборот за этот период.
-      // Пока открыт магазин или «реклама» — время стоит: бомбы не горят
-      const paused = shopOpenRef.current || adPlayingRef.current;
+      // Пока открыт магазин, «реклама», рука держит фигуру или прицелен молоток —
+      // время стоит: бомбы не горят (иначе бомбу с цифрой 1 взрывало в момент,
+      // когда игрок держал над ней завершающую линию — «обезвредили, а она бум»)
+      const paused = shopOpenRef.current || adPlayingRef.current || g.drag !== null || g.armed;
       if (!g.over && !paused && g.idleAcc + dt >= IDLE_BOMB_TICK) {
         g.idleAcc = 0;
         const hasBombs =
@@ -428,7 +442,25 @@ export default function GameScreen({
       const lineCount = rows.length + cols.length;
       if (lineCount > 0) {
         const defusedNow = bombsInLines(g.grid, rows, cols);
-        // камни остаются на месте — очки только за реально смытые клетки
+        // камни от взрыва линии трескаются: 3-й удар — разрушение. Удары считаем
+        // заранее (до мутации сетки), чтобы начислить очки за разрушенные камни
+        // и дать крошку/звук на каждый удар
+        const stoneHits: { r: number; c: number; destroyed: boolean }[] = [];
+        const hitSeen = new Set<number>();
+        const registerHit = (r: number, c: number) => {
+          const k = r * 100 + c;
+          if (!hitSeen.has(k) && isStone(g.grid[r][c])) {
+            hitSeen.add(k);
+            stoneHits.push({ r, c, destroyed: g.grid[r][c] === STONE_MIN });
+          }
+        };
+        for (const r of rows) {
+          for (let c = 0; c < GRID_SIZE; c++) registerHit(r, c);
+        }
+        for (const c of cols) {
+          for (let r = 0; r < GRID_SIZE; r++) if (!rows.includes(r)) registerHit(r, c);
+        }
+        // очки — за реально смытые клетки и разрушенные камни (трещины не в счёт)
         let cellsCleared = 0;
         for (const r of rows) {
           for (let c = 0; c < GRID_SIZE; c++) if (!isStone(g.grid[r][c])) cellsCleared++;
@@ -436,6 +468,7 @@ export default function GameScreen({
         for (const c of cols) {
           for (let r = 0; r < GRID_SIZE; r++) if (!rows.includes(r) && !isStone(g.grid[r][c])) cellsCleared++;
         }
+        cellsCleared += stoneHits.filter((h) => h.destroyed).length;
         g.streak += 1;
         g.defused += defusedNow;
         const goalColor = collectGoal(level)?.color ?? -1;
@@ -459,6 +492,20 @@ export default function GameScreen({
               if (!isStone(v)) spawnBurst(g.particles, L, r, c, v);
             }
           }
+        }
+        // камни: пыль за удар, осколки за разрушение + глухой треск
+        for (const h of stoneHits) {
+          spawnBurstAt(
+            g.particles,
+            L.boardX + (h.c + 0.5) * L.cell,
+            L.boardY + (h.r + 0.5) * L.cell,
+            STONE_COLORS,
+            h.destroyed ? 10 : 5,
+          );
+        }
+        if (stoneHits.length > 0) {
+          sfx.stoneCrack(stoneHits.some((h) => h.destroyed));
+          vibrate(stoneHits.some((h) => h.destroyed) ? [25, 30, 40] : 18);
         }
         // центроид взрыва для текста
         let sx = 0;
@@ -528,12 +575,19 @@ export default function GameScreen({
         sfx.clear(lineCount, g.streak);
         vibrate(lineCount >= 2 ? [20, 40, 30] : 25);
 
-        // камни не смываются линией — их берёт только кратер бомбы или молоток
+        // смытие линии: блоки исчезают, камни трескаются (3-й удар — в пыль)
         for (const r of rows) {
-          for (let c = 0; c < GRID_SIZE; c++) if (!isStone(g.grid[r][c])) g.grid[r][c] = 0;
+          for (let c = 0; c < GRID_SIZE; c++) {
+            if (isStone(g.grid[r][c])) hitStone(g.grid, r, c);
+            else g.grid[r][c] = 0;
+          }
         }
         for (const c of cols) {
-          for (let r = 0; r < GRID_SIZE; r++) if (!rows.includes(r) && !isStone(g.grid[r][c])) g.grid[r][c] = 0;
+          for (let r = 0; r < GRID_SIZE; r++) {
+            if (rows.includes(r)) continue;
+            if (isStone(g.grid[r][c])) hitStone(g.grid, r, c);
+            else g.grid[r][c] = 0;
+          }
         }
       } else {
         g.streak = 0;
@@ -657,7 +711,7 @@ export default function GameScreen({
         });
         spawnBurst(g.particles, L, r, c, 0);
       } else {
-        g.score += Math.round(10 * mult);
+        g.score += Math.round(12 * mult);
         const cg = collectGoal(level);
         if (cg && v === cg.color) g.collected += 1;
         spawnBurst(g.particles, L, r, c, v);
@@ -754,6 +808,29 @@ export default function GameScreen({
   const abortAd = useCallback(() => {
     endAd();
   }, [endAd]);
+
+  // пополнение: в приложении — настоящий ролик Яндекса, на сайте — демо
+  const topUp = useCallback(() => {
+    if (adPlayingRef.current) return;
+    if (nativeAdsAvailable()) {
+      startAd();
+      setNativeAd(true);
+      void showRewardedAd().then((res) => {
+        if (res === "rewarded") {
+          claimAd();
+        } else {
+          endAd();
+          if (res === "failed") {
+            setAdError(true);
+            window.clearTimeout(adErrorTimer.current);
+            adErrorTimer.current = window.setTimeout(() => setAdError(false), 3500);
+          }
+        }
+      });
+    } else {
+      startAd();
+    }
+  }, [claimAd, endAd, startAd]);
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const g = gameRef.current;
@@ -902,6 +979,7 @@ export default function GameScreen({
     // рестарт возможен и из окна победы (<3 звёзд) — закрываем магазин/рекламу/подтверждение
     closeShop();
     endAd();
+    setAdError(false);
     setPendingBuy(null);
   }, [level, closeShop, endAd]);
 
@@ -1286,9 +1364,14 @@ export default function GameScreen({
                 })}
               </div>
               {/* одна общая кнопка пополнения: реклама → +монеты, без автопокупки */}
+              {adError && (
+                <div className="mt-2 text-center text-[11px] font-bold text-rose-300/90" role="status">
+                  {t.adUnavailable}
+                </div>
+              )}
               <button
                 type="button"
-                onClick={startAd}
+                onClick={topUp}
                 aria-label={t.topUpAria(adReward)}
                 className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-teal-400/40 bg-gradient-to-b from-teal-500/20 to-teal-500/10 py-2.5 text-sm font-black text-teal-300 transition active:scale-95 hover:bg-teal-500/25"
               >
@@ -1323,8 +1406,21 @@ export default function GameScreen({
           />
         )}
 
-        {/* ── «Реклама» за монеты (демо: сюда позже встанет реальный ролик) ── */}
-        {adPlaying && <AdOverlay lang={lang} reward={adReward} onClaim={claimAd} onAbort={abortAd} />}
+        {/* ── Реклама за монеты: демо-оверлей на сайте / ролик Яндекса в приложении ── */}
+        {adPlaying && !nativeAd && <AdOverlay lang={lang} reward={adReward} onClaim={claimAd} onAbort={abortAd} />}
+
+        {/* нативный ролик: игровое время стоит (adPlaying), пока грузится/идёт реклама */}
+        {adPlaying && nativeAd && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="rounded-2xl border border-white/10 bg-[#1c1a24] px-6 py-4 text-sm font-bold text-white/80 shadow-2xl">
+              {t.adLoading}
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

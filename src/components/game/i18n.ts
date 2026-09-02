@@ -84,6 +84,9 @@ export interface Strings {
   adSeconds: (s: number) => string;
   adClaim: (n: number) => string;
   adCloseAria: string;
+  // нативная реклама (Yandex Mobile Ads внутри Android-приложения)
+  adLoading: string;
+  adUnavailable: string;
   // оверлей поражения
   levelFailed: (n: number) => string;
   loseMoves: string;
@@ -168,6 +171,8 @@ const ru: Strings = {
   adSeconds: (s) => `${s} с`,
   adClaim: (n) => `Забрать +${n} монет`,
   adCloseAria: "Закрыть рекламу без награды",
+  adLoading: "Загрузка рекламы…",
+  adUnavailable: "Реклама недоступна — попробуйте позже",
   levelFailed: (n) => `Уровень ${n} не пройден`,
   loseMoves: "Ходы закончились!",
   loseBombs: "Бабах! Бомбы одолели",
@@ -246,6 +251,8 @@ const en: Strings = {
   adSeconds: (s) => `${s}s`,
   adClaim: (n) => `Claim +${n} coins`,
   adCloseAria: "Close the ad without a reward",
+  adLoading: "Loading ad…",
+  adUnavailable: "Ad unavailable — try again later",
   levelFailed: (n) => `Level ${n} failed`,
   loseMoves: "Out of moves!",
   loseBombs: "Boom! The bombs won",

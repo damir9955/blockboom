@@ -228,9 +228,11 @@ export function starsFor(movesLeftRatio: number, livesLost: number): number {
 }
 
 /** Монеты за победу: первый раз — крупно, реплей — скромно.
- *  Чуть послабее прежнего (было 50+40*зв и 20), чтобы реклама «+110» была в тему. */
-export const COIN_REPLAY = 15;
+ *  Режем доход сильнее (45+35·зв → 30+20·зв, реплей 15 → 10): теперь даже
+ *  идеальная победа (90) дешевле любого бустера (от 100), а реклама даёт +110 —
+ *  иначе реклама не имеет смысла. */
+export const COIN_REPLAY = 10;
 
 export function coinsFor(stars: number, firstClear: boolean): number {
-  return firstClear ? 45 + 35 * stars : COIN_REPLAY;
+  return firstClear ? 30 + 20 * stars : COIN_REPLAY;
 }
