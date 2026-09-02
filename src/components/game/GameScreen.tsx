@@ -12,7 +12,6 @@ import {
   RotateCcw,
   Shuffle,
   Star,
-  Target,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -30,8 +29,11 @@ import {
   fullLines,
   generatePieces,
   GRID_SIZE,
+  IDLE_BOMB_TICK,
+  isStone,
   MAX_BOARD_BOMBS,
   spawnBoardBomb,
+  spawnStones,
   tickBoardBombs,
   type Grid,
   type Piece,
@@ -49,6 +51,7 @@ import {
   easeOutCubic,
   FIRE_COLORS,
   hasLowBomb,
+  idleRing,
   spawnBurst,
   spawnBurstAt,
   TRAY_SCALE,
@@ -58,13 +61,9 @@ import {
   type GameState,
   type LayoutMetrics,
 } from "./render";
-import { coinsFor, goalProgressText, goalReached, starsFor, type LevelDef } from "./levels";
+import { coinsFor, collectGoal, goalProgressTexts, goalReached, scoreMultiplier, starsFor, type LevelDef } from "./levels";
 import { tr, type Lang, type Strings } from "./i18n";
-import { markTutSeen, seenTuts, tutForBombs, tutForGoal, tutForPieceBombs, type TutInfo } from "./tutorial";
 import type { BoosterKind } from "./progress";
-
-/** Фитиль тикает по времени: раз в столько секунд простоя */
-const IDLE_BOMB_TICK = 10;
 
 export interface LevelResult {
   levelN: number;
@@ -87,8 +86,10 @@ interface Props {
 }
 
 function makeInitialGame(level: LevelDef): GameState {
+  const grid = emptyGrid();
+  if (level.stones > 0) spawnStones(grid, level.stones);
   return {
-    grid: emptyGrid(),
+    grid,
     pieces: [null, null, null],
     dead: [false, false, false],
     drag: null,
@@ -108,7 +109,7 @@ function makeInitialGame(level: LevelDef): GameState {
     nextBombAt: level.bombsFrom,
     idleAcc: 0,
     collected: 0,
-    goalColor: level.goal.type === "collect" ? level.goal.color : undefined,
+    goalColor: collectGoal(level)?.color,
     armed: false,
     hammerTarget: null,
     overReason: null,
@@ -118,7 +119,7 @@ function makeInitialGame(level: LevelDef): GameState {
 
 /** Генерация с подмешиванием цвета цели: иначе collect-цели недостижимы */
 function piecesFor(level: LevelDef, grid: Grid, allowBomb: boolean): Piece[] {
-  const bias = level.goal.type === "collect" ? level.goal.color : undefined;
+  const bias = collectGoal(level)?.color;
   return generatePieces(grid, level.diff, allowBomb, bias);
 }
 
@@ -159,14 +160,8 @@ export default function GameScreen({
   const [result, setResult] = useState<{ stars: number; coins: number } | null>(null);
   const [showOverlay, setShowOverlay] = useState(false);
   const [armed, setArmed] = useState(false);
-  const [tut, setTut] = useState<TutInfo | null>(null);
-  // туториал открыт → фичи в простое не тикают, ввод заблокирован
-  const tutRef = useRef<TutInfo | null>(null);
-  const seenRef = useRef<Set<string>>(seenTuts());
-  const langRef = useRef(lang);
-  useEffect(() => {
-    langRef.current = lang;
-  }, [lang]);
+  // задачи уровня подсвечиваются на старте (~4 секунды), чтобы было ясно, что делать
+  const [goalFlash, setGoalFlash] = useState(true);
 
   const getSfx = useCallback((): Sfx => {
     if (!sfxRef.current) sfxRef.current = new Sfx();
@@ -178,44 +173,19 @@ export default function GameScreen({
     timersRef.current.push(id);
   };
 
-  // Инициализация: фигуры сразу + туториал цели, если тип цели новый
+  // Инициализация: фигуры сразу; чипы задач сверху подсвечиваются первые ~4 с
+  // (goalFlash стартует true — таймер снимает подсветку)
   useEffect(() => {
     const g = gameRef.current;
     g.pieces = piecesFor(level, g.grid, false);
     refreshDead(g);
-    const info = tutForGoal(level, langRef.current);
-    let tid = 0;
-    if (info && !seenRef.current.has(info.id)) {
-      tid = window.setTimeout(() => {
-        if (seenRef.current.has(info!.id) || phaseRef.current !== "play") return;
-        seenRef.current.add(info!.id);
-        tutRef.current = info!;
-        setTut(info!);
-        vibrate([15, 30, 15]);
-      }, 450);
-    }
+    const tid = window.setTimeout(() => setGoalFlash(false), 4000);
     return () => {
-      if (tid) window.clearTimeout(tid);
+      window.clearTimeout(tid);
       timersRef.current.forEach((t) => window.clearTimeout(t));
       timersRef.current = [];
     };
   }, [level]);
-
-  /** Показать мини-окно туториала ПРЯМО СЕЙЧАС (спавн бомбы, фигура-бомба) */
-  const showTutNow = useCallback((info: TutInfo | null) => {
-    if (!info || phaseRef.current !== "play" || seenRef.current.has(info.id)) return;
-    seenRef.current.add(info.id);
-    tutRef.current = info;
-    setTut(info);
-    vibrate([15, 30, 15]);
-  }, []);
-
-  const dismissTut = useCallback(() => {
-    const info = tutRef.current;
-    if (info) markTutSeen(info.id);
-    tutRef.current = null;
-    setTut(null);
-  }, []);
 
   // Синхронизация mute
   useEffect(() => {
@@ -238,6 +208,9 @@ export default function GameScreen({
           defused: g.defused,
           collected: g.collected,
           goalColor: g.goalColor ?? null,
+          goals: level.goals,
+          stones: g.grid.flat().filter(isStone).length,
+          idleAcc: g.idleAcc,
           trayColors: g.pieces.map((p) => (p ? p.color : null)),
           grid: g.grid.map((row) => row.slice()),
           phase: phaseRef.current,
@@ -246,7 +219,7 @@ export default function GameScreen({
         };
       };
     }
-  }, []);
+  }, [level]);
 
   // Адаптивный размер canvas
   useEffect(() => {
@@ -328,9 +301,9 @@ export default function GameScreen({
       const g = gameRef.current;
       const L = layoutRef.current;
       const canvas = canvasRef.current;
-      // фитиль горит и по времени: каждые IDLE_BOMB_TICK секунд простоя — тик
-      // (пока открыто окно туториала — время стоит, чтение не наказывается)
-      if (!g.over && !tutRef.current && g.idleAcc + dt >= IDLE_BOMB_TICK) {
+      // фитиль горит и по времени: каждые IDLE_BOMB_TICK (7) секунд простоя — тик;
+      // сгорающее кольцо вокруг бомбы делает ровно один оборот за этот период
+      if (!g.over && g.idleAcc + dt >= IDLE_BOMB_TICK) {
         g.idleAcc = 0;
         const hasBombs =
           boardBombCount(g.grid) > 0 || g.pieces.some((p) => p && p.bombTimer !== null);
@@ -366,6 +339,7 @@ export default function GameScreen({
       const g = gameRef.current;
       const L = layoutRef.current;
       const sfx = getSfx();
+      const mult = scoreMultiplier(level);
 
       // 1. ставим фигуру (клетка-бомба становится тикающей бомбой на поле)
       g.placements += 1;
@@ -382,7 +356,7 @@ export default function GameScreen({
         freshKeys.add(r * 100 + c);
       });
       g.pieces[slot] = null;
-      g.score += piece.shape.size;
+      g.score += Math.round(piece.shape.size * mult);
       sfx.place();
       vibrate(12);
 
@@ -390,12 +364,19 @@ export default function GameScreen({
       const lineCount = rows.length + cols.length;
       if (lineCount > 0) {
         const defusedNow = bombsInLines(g.grid, rows, cols);
-        const cellsCleared = lineCount * GRID_SIZE - rows.length * cols.length;
+        // камни остаются на месте — очки только за реально смытые клетки
+        let cellsCleared = 0;
+        for (const r of rows) {
+          for (let c = 0; c < GRID_SIZE; c++) if (!isStone(g.grid[r][c])) cellsCleared++;
+        }
+        for (const c of cols) {
+          for (let r = 0; r < GRID_SIZE; r++) if (!rows.includes(r) && !isStone(g.grid[r][c])) cellsCleared++;
+        }
         g.streak += 1;
         g.defused += defusedNow;
-        const goalColor = level.goal.type === "collect" ? level.goal.color : -1;
+        const goalColor = collectGoal(level)?.color ?? -1;
         const res = clearScore(lineCount, cellsCleared, g.streak);
-        g.score += res.total + defusedNow * 100;
+        g.score += Math.round((res.total + defusedNow * 100) * mult);
         g.lines += lineCount;
 
         // частицы из каждой взорванной клетки + подсчёт сбора цвета цели
@@ -403,7 +384,7 @@ export default function GameScreen({
           for (let c = 0; c < GRID_SIZE; c++) {
             const v = g.grid[r][c];
             if (v === goalColor) g.collected += 1;
-            spawnBurst(g.particles, L, r, c, v);
+            if (!isStone(v)) spawnBurst(g.particles, L, r, c, v);
           }
         }
         for (const c of cols) {
@@ -411,7 +392,7 @@ export default function GameScreen({
             if (!rows.includes(r)) {
               const v = g.grid[r][c];
               if (v === goalColor) g.collected += 1;
-              spawnBurst(g.particles, L, r, c, v);
+              if (!isStone(v)) spawnBurst(g.particles, L, r, c, v);
             }
           }
         }
@@ -483,9 +464,12 @@ export default function GameScreen({
         sfx.clear(lineCount, g.streak);
         vibrate(lineCount >= 2 ? [20, 40, 30] : 25);
 
-        for (const r of rows) g.grid[r].fill(0);
+        // камни не смываются линией — их берёт только кратер бомбы или молоток
+        for (const r of rows) {
+          for (let c = 0; c < GRID_SIZE; c++) if (!isStone(g.grid[r][c])) g.grid[r][c] = 0;
+        }
         for (const c of cols) {
-          for (let r = 0; r < GRID_SIZE; r++) g.grid[r][c] = 0;
+          for (let r = 0; r < GRID_SIZE; r++) if (!rows.includes(r) && !isStone(g.grid[r][c])) g.grid[r][c] = 0;
         }
       } else {
         g.streak = 0;
@@ -519,8 +503,6 @@ export default function GameScreen({
             spawnBurstAt(g.particles, bx, by, FIRE_COLORS, 6);
             sfx.bombSpawn();
             vibrate([20, 45, 20]);
-            // первая в жизни игрока полевая бомба — объясняем, что это такое
-            showTutNow(tutForBombs(langRef.current));
             g.nextBombAt = g.placements + level.bombEvery;
           } else {
             g.nextBombAt = g.placements + 1;
@@ -531,10 +513,6 @@ export default function GameScreen({
       // 5. пополнение лотка
       if (g.pieces.every((p) => p === null)) {
         g.pieces = piecesFor(level, g.grid, level.pieceBombs && g.placements >= 6);
-        // первая фигура-бомба в лотке — объясняем механику
-        if (g.pieces.some((p) => p && p.bomb !== null)) {
-          showTutNow(tutForPieceBombs(langRef.current));
-        }
       }
       refreshDead(g);
 
@@ -565,7 +543,7 @@ export default function GameScreen({
       setDefused(g.defused);
       setCollected(g.collected);
     },
-    [getSfx, level, winLevel, loseLevel, t, showTutNow],
+    [getSfx, level, winLevel, loseLevel, t],
   );
 
   const getPos = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -598,11 +576,12 @@ export default function GameScreen({
       const g = gameRef.current;
       const L = layoutRef.current;
       const sfx = getSfx();
+      const mult = scoreMultiplier(level);
       const v = applyHammer(g.grid, r, c);
       if (v === 0) return;
       if (v < 0) {
         g.defused += 1;
-        g.score += 100;
+        g.score += Math.round(100 * mult);
         g.texts.push({
           x: L.boardX + (c + 0.5) * L.cell,
           y: L.boardY + (r + 0.5) * L.cell,
@@ -614,8 +593,9 @@ export default function GameScreen({
         });
         spawnBurst(g.particles, L, r, c, 0);
       } else {
-        g.score += 10;
-        if (level.goal.type === "collect" && v === level.goal.color) g.collected += 1;
+        g.score += Math.round(10 * mult);
+        const cg = collectGoal(level);
+        if (cg && v === cg.color) g.collected += 1;
         spawnBurst(g.particles, L, r, c, v);
       }
       sfx.hammer();
@@ -646,9 +626,6 @@ export default function GameScreen({
     if (phaseRef.current !== "play" || boosters.shuffle <= 0) return;
     const fresh = piecesFor(level, g.grid, level.pieceBombs && g.placements >= 6);
     g.pieces = g.pieces.map((p, i) => (p ? fresh[i] : null));
-    if (g.pieces.some((p) => p && p.bomb !== null)) {
-      showTutNow(tutForPieceBombs(langRef.current));
-    }
     refreshDead(g);
     const L = layoutRef.current;
     for (let i = 0; i < 3; i++) {
@@ -657,7 +634,7 @@ export default function GameScreen({
     getSfx().shuffle();
     vibrate(15);
     onUseBooster("shuffle");
-  }, [boosters.shuffle, getSfx, level, onUseBooster, showTutNow]);
+  }, [boosters.shuffle, getSfx, level, onUseBooster]);
 
   // +5 ходов
   const usePlus5 = useCallback(() => {
@@ -678,15 +655,11 @@ export default function GameScreen({
     getSfx().coin();
     vibrate([15, 30, 15]);
     onUseBooster("plus5");
-    // если упирались в лимит ходов — теперь есть продолжение
-    if (g.over && phaseRef.current === "lost") {
-      // (поражение уже зафиксировано — бустер не оживляет уровень)
-    }
   }, [boosters.plus5, getSfx, onUseBooster, t]);
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const g = gameRef.current;
-    if (phaseRef.current !== "play" || tutRef.current) return;
+    if (phaseRef.current !== "play") return;
     const { x, y } = getPos(e);
     const L = layoutRef.current;
     // молоток взведён — тап по блоку сносит его
@@ -731,11 +704,10 @@ export default function GameScreen({
 
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const g = gameRef.current;
-    if (tutRef.current) return;
     const { x, y } = getPos(e);
     if (g.armed) {
       const cell = cellAt(x, y);
-      g.hammerTarget = cell;
+      g.hammerTarget = cell ? { r: cell.row, c: cell.col } : null;
       return;
     }
     if (!g.drag) return;
@@ -764,7 +736,7 @@ export default function GameScreen({
 
   const onPointerUp = () => {
     const g = gameRef.current;
-    if (g.armed || tutRef.current) return;
+    if (g.armed) return;
     if (!g.drag) return;
     const d = g.drag;
     g.drag = null;
@@ -781,19 +753,15 @@ export default function GameScreen({
       cx < L.boardX + GRID_SIZE * L.cell + L.cell &&
       cy > L.boardY - L.cell &&
       cy < L.boardY + GRID_SIZE * L.cell + L.cell;
-    if (overBoard) getSfx().fail();
+    if (overBoard) getSfx().bump();
     g.anim = { slot: d.slot, piece: d.piece, x: cx, y: cy, t: 0 };
   };
 
   // Рестарт уровня
   const restart = useCallback(() => {
     const g = gameRef.current;
-    const tutOpen = tutRef.current !== null;
-    if (tutOpen) {
-      tutRef.current = null;
-      setTut(null);
-    }
     g.grid = emptyGrid();
+    if (level.stones > 0) spawnStones(g.grid, level.stones);
     g.pieces = piecesFor(level, g.grid, false);
     g.dead = [false, false, false];
     g.drag = null;
@@ -830,14 +798,12 @@ export default function GameScreen({
     setShowOverlay(false);
     setArmed(false);
     setLoseReason(null);
+    // задачи снова подсвечиваются после рестарта
+    setGoalFlash(true);
+    addTimer(window.setTimeout(() => setGoalFlash(false), 4000));
   }, [level]);
 
-  const goal = goalProgressText(level, { lines: linesCleared, defused, collected, score }, lang);
-  const goalDone = goal.now >= goal.target;
-  const goalColor =
-    level.goal.type === "collect" && level.goal.color
-      ? BLOCK_COLORS[level.goal.color - 1]?.top
-      : undefined;
+  const goalChips = goalProgressTexts(level, { lines: linesCleared, defused, collected, score }, lang);
 
   const resultPayload = (won: boolean): LevelResult => ({
     levelN: level.n,
@@ -854,7 +820,7 @@ export default function GameScreen({
   return (
     <div className="flex min-h-[100dvh] w-full flex-col items-center bg-[#131118] bg-gradient-to-b from-[#1a1723] via-[#141219] to-[#0f0e14] text-white select-none">
       <main className="flex w-full max-w-[420px] flex-1 flex-col px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-[max(env(safe-area-inset-top),12px)]">
-        {/* Верхняя строка: выход, цель, жизни, звук */}
+        {/* Верхняя строка: выход, жизни, звук */}
         <div className="flex items-center justify-between gap-2 pb-1">
           <button
             type="button"
@@ -864,52 +830,65 @@ export default function GameScreen({
           >
             <ArrowLeft className="size-4" />
           </button>
-          <div
-            className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-bold ${
-              goalDone
-                ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
-                : "border-white/10 bg-white/5 text-white/80"
-            }`}
-            role="status"
-            aria-label={t.goalAria(goal.label, goal.now, goal.target)}
-          >
-            {level.goal.type === "collect" && goalColor ? (
-              <span
-                className="inline-block size-3.5 rounded-[4px]"
-                style={{ background: goalColor }}
+          <div className="flex items-center gap-0.5" aria-label={t.livesAria(lives)}>
+            {[0, 1, 2].map((i) => (
+              <Heart
+                key={i}
                 aria-hidden="true"
+                className={`size-4 ${i < lives ? "text-rose-500" : "text-white/15"}`}
+                fill={i < lives ? "currentColor" : "none"}
               />
-            ) : level.goal.type === "defuse" ? (
-              <Bomb className="size-4 shrink-0 text-rose-400" aria-hidden="true" />
-            ) : level.goal.type === "score" ? (
-              <Star className="size-4 shrink-0 text-amber-400" aria-hidden="true" />
-            ) : (
-              <Flame className="size-4 shrink-0 text-orange-400" aria-hidden="true" />
-            )}
-            <span className="truncate">
-              {goal.label} {goal.now}/{goal.target}
-            </span>
+            ))}
           </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-0.5" aria-label={t.livesAria(lives)}>
-              {[0, 1, 2].map((i) => (
-                <Heart
-                  key={i}
-                  aria-hidden="true"
-                  className={`size-4 ${i < lives ? "text-rose-500" : "text-white/15"}`}
-                  fill={i < lives ? "currentColor" : "none"}
-                />
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={onToggleMute}
-              aria-label={muted ? t.soundOnAria : t.soundOffAria}
-              className="rounded-xl border border-white/10 bg-white/5 p-2.5 text-white/70 transition active:scale-90 hover:bg-white/10"
-            >
-              {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onToggleMute}
+            aria-label={muted ? t.soundOnAria : t.soundOffAria}
+            className="rounded-xl border border-white/10 bg-white/5 p-2.5 text-white/70 transition active:scale-90 hover:bg-white/10"
+          >
+            {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+          </button>
+        </div>
+
+        {/* Задачи уровня (1-3): на старте подсвечиваются первые ~4 секунды */}
+        <div
+          className="flex flex-wrap items-center justify-center gap-1.5 pb-1"
+          role="status"
+          aria-label={t.goalsAria}
+        >
+          {goalChips.map((gp, i) => {
+            const swatch =
+              gp.goal.type === "collect" && gp.goal.color ? BLOCK_COLORS[gp.goal.color - 1]?.top : undefined;
+            return (
+              <div
+                key={`${i}-${gp.label}`}
+                className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-bold ${
+                  gp.done
+                    ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
+                    : "border-white/10 bg-white/5 text-white/80"
+                } ${goalFlash ? "goal-flash" : ""}`}
+                style={goalFlash ? { animationDelay: `${i * 0.12}s` } : undefined}
+                aria-label={t.goalAria(gp.label, gp.now, gp.target)}
+              >
+                {swatch ? (
+                  <span
+                    className="inline-block size-3.5 shrink-0 rounded-[4px]"
+                    style={{ background: swatch }}
+                    aria-hidden="true"
+                  />
+                ) : gp.goal.type === "defuse" ? (
+                  <Bomb className="size-4 shrink-0 text-rose-400" aria-hidden="true" />
+                ) : gp.goal.type === "score" ? (
+                  <Star className="size-4 shrink-0 text-amber-400" aria-hidden="true" />
+                ) : (
+                  <Flame className="size-4 shrink-0 text-orange-400" aria-hidden="true" />
+                )}
+                <span className="tabular-nums">
+                  {gp.label} {gp.now}/{gp.target}
+                </span>
+              </div>
+            );
+          })}
         </div>
 
         {/* Ходы и очки */}
@@ -1004,7 +983,11 @@ export default function GameScreen({
                 <div className="mt-2 text-xl font-black text-white">
                   {loseReason === "moves" ? t.loseMoves : loseReason === "bombs" ? t.loseBombs : t.loseStall}
                 </div>
-                <div className="mt-2 text-xs text-white/40">{t.goalLine(goal.label, goal.now, goal.target)}</div>
+                <div className="mt-2 text-xs text-white/40">
+                  {goalChips.map((gp, i) => (
+                    <div key={i}>{t.goalLine(gp.label, gp.now, gp.target)}</div>
+                  ))}
+                </div>
                 <button
                   type="button"
                   onClick={restart}
@@ -1026,41 +1009,6 @@ export default function GameScreen({
             </div>
           )}
 
-          {/* Мини-окно туториала: объясняет механику в момент её первого появления */}
-          {tut && phase === "play" && (
-            <div
-              className="absolute inset-0 z-20 flex items-center justify-center bg-black/70 backdrop-blur-sm"
-              role="dialog"
-              aria-modal="true"
-              aria-label={tut.title}
-            >
-              <div className="tut-pop w-[86%] max-w-xs rounded-2xl border border-amber-400/25 bg-[#1c1a24] p-5 text-center shadow-2xl">
-                <div className="mx-auto flex size-12 items-center justify-center rounded-full border border-white/10 bg-gradient-to-b from-amber-400/20 to-orange-500/20">
-                  {tut.id === "goal-lines" ? (
-                    <Flame className="size-6 text-orange-400" aria-hidden="true" />
-                  ) : tut.id === "goal-score" ? (
-                    <Star className="size-6 text-amber-400" aria-hidden="true" />
-                  ) : tut.id === "goal-collect" ? (
-                    <Target className="size-6 text-emerald-400" aria-hidden="true" />
-                  ) : (
-                    <Bomb className="size-6 text-rose-400" aria-hidden="true" />
-                  )}
-                </div>
-                <div className="mt-3 text-[10px] font-black uppercase tracking-widest text-amber-400/80">
-                  {t.tutBadge}
-                </div>
-                <div className="mt-1 text-lg font-black text-white">{tut.title}</div>
-                <p className="mt-2 text-xs leading-relaxed text-white/60">{tut.body}</p>
-                <button
-                  type="button"
-                  onClick={dismissTut}
-                  className="mt-4 w-full rounded-xl bg-gradient-to-b from-amber-400 to-orange-500 py-2.5 text-sm font-black text-[#221a08] shadow-lg shadow-orange-950/50 transition active:scale-95"
-                >
-                  {t.tutGotIt}
-                </button>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Бустеры */}
@@ -1217,7 +1165,7 @@ function drawFrame(ctx: CanvasRenderingContext2D, g: GameState, L: LayoutMetrics
     const cy = g.anim.y + (ty - g.anim.y) * e;
     const scale = 1 + (TRAY_SCALE - 1) * e;
     if (k >= 1) g.anim = null;
-    else drawPieceAt(ctx, g.anim.piece, cx, cy, L.cell, scale, 1, g.time);
+    else drawPieceAt(ctx, g.anim.piece, cx, cy, L.cell, scale, 1, g.time, g.goalColor, idleRing(g));
   }
 
   // фигура в руке
@@ -1241,7 +1189,7 @@ function drawFrame(ctx: CanvasRenderingContext2D, g: GameState, L: LayoutMetrics
     ctx.ellipse(cx, cy + h / 2 + 6, w * 0.4, 7, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
-    drawPieceAt(ctx, d.piece, cx, cy, L.cell, scale, 1, g.time);
+    drawPieceAt(ctx, d.piece, cx, cy, L.cell, scale, 1, g.time, undefined, idleRing(g));
   }
 
   updateParticles(ctx, g.particles, dt);

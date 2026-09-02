@@ -1,6 +1,6 @@
 // ── Отрисовка на canvas: поле, блоки, частицы, тексты ──────────────────────
 
-import { BLOCK_COLORS, GRID_SIZE, type Grid, type Piece } from "./engine";
+import { BLOCK_COLORS, GRID_SIZE, IDLE_BOMB_TICK, isStone, type Grid, type Piece } from "./engine";
 
 export const TRAY_SCALE = 0.55;
 
@@ -175,9 +175,16 @@ export function drawBlock(
   ctx.restore();
 }
 
+/** Прогресс «сгорающего кольца» бомбы: 0 — кольцо полное, 1 — тик вот-вот */
+export function idleRing(g: GameState): number {
+  return Math.max(0, Math.min(1, g.idleAcc / IDLE_BOMB_TICK));
+}
+
 /** Бомба: пульсирующий тёмный ШАР с капсюлем, видимым ФИТИЛЁМ, искрой и таймером.
  *  Пульсирует ВСЕГДА (спокойно ~0.9 Гц; при таймере ≤ 2 — быстро и с красным свечением),
- *  фаза phase рассинхронизирует бомбы на поле, чтобы не пульсировали хором. */
+ *  фаза phase рассинхронизирует бомбы на поле, чтобы не пульсировали хором.
+ *  ring — прогресс «сгорающего кольца» (0..1): круг по периметру выгорает ПРОТИВ
+ *  часовой стрелки за IDLE_BOMB_TICK секунд; цифра меняется — круг загорается заново. */
 export function drawBombBlock(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -187,6 +194,7 @@ export function drawBombBlock(
   time: number,
   alpha = 1,
   phase = 0,
+  ring?: number,
 ): void {
   const urgent = timer <= 2;
   const pulse = urgent ? 1 + 0.09 * Math.sin(time * 13 + phase) : 1 + 0.045 * Math.sin(time * 4.5 + phase);
@@ -280,6 +288,90 @@ export function drawBombBlock(
   ctx.lineWidth = Math.max(2, s * 0.07);
   ctx.strokeText(String(Math.max(0, timer)), cx, cy);
   ctx.fillText(String(Math.max(0, timer)), cx, cy);
+
+  // СГОРАЮЩЕЕ КОЛЬЦО-ОТСЧЁТ: круг по периметру выгорает против часовой стрелки;
+  // «огонь» (яркая точка) идёт от 12 часов налево-вниз, за ним кольцо исчезает.
+  if (ring !== undefined && ring > 0.001 && ring < 0.999) {
+    const ringR = s * 0.42;
+    const lw = Math.max(2, s * 0.07);
+    // дорожка-подложка
+    ctx.strokeStyle = "rgba(255,255,255,0.10)";
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+    ctx.stroke();
+    // цвет: янтарь → красный по мере выгорания
+    const heat = Math.max(0, Math.min(1, (ring - 0.4) / 0.6));
+    const rr = Math.round(255);
+    const gg = Math.round(194 + (77 - 194) * heat);
+    const bb = Math.round(61 + (77 - 61) * heat);
+    ctx.strokeStyle = `rgba(${rr},${gg},${bb},0.95)`;
+    ctx.lineCap = "round";
+    // видимая часть — от точки горения против часовой обратно к 12 часам
+    const burn = -Math.PI / 2 - Math.PI * 2 * ring;
+    ctx.beginPath();
+    ctx.arc(cx, cy, ringR, burn, -Math.PI / 2, true);
+    ctx.stroke();
+    // «огонь» на точке горения — мерцающая искра
+    const fx = cx + ringR * Math.cos(burn);
+    const fy = cy + ringR * Math.sin(burn);
+    const flick = 0.7 + 0.3 * Math.abs(Math.sin(time * 11 + phase));
+    const fr = s * 0.07 * flick;
+    const fg = ctx.createRadialGradient(fx, fy, 0, fx, fy, fr * 2.4);
+    fg.addColorStop(0, "#ffffff");
+    fg.addColorStop(0.35, heat > 0.5 ? "#ff8a4d" : "#ffd34d");
+    fg.addColorStop(1, "rgba(255,120,40,0)");
+    ctx.fillStyle = fg;
+    ctx.beginPath();
+    ctx.arc(fx, fy, fr * 2.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff3b0";
+    ctx.beginPath();
+    ctx.arc(fx, fy, fr * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** Камень-препятствие: тёмный гранит с фаской и трещинами. Линией не смывается —
+ *  только взрыв бомбы (кратер 3×3) или молоток. */
+export function drawStoneBlock(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  s: number,
+  alpha = 1,
+): void {
+  const pad = s * 0.05;
+  const r = s * 0.18;
+  const w = s - pad * 2;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  const grad = ctx.createLinearGradient(0, y, 0, y + s);
+  grad.addColorStop(0, "#8d93a3");
+  grad.addColorStop(0.5, "#6b7280");
+  grad.addColorStop(1, "#4b5563");
+  ctx.fillStyle = grad;
+  roundRect(ctx, x + pad, y + pad, w, w, r);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(0,0,0,0.4)";
+  ctx.lineWidth = Math.max(1, s * 0.05);
+  ctx.stroke();
+  // верхняя фаска
+  ctx.fillStyle = "rgba(255,255,255,0.16)";
+  roundRect(ctx, x + pad + w * 0.08, y + pad + w * 0.07, w * 0.84, w * 0.24, r * 0.55);
+  ctx.fill();
+  // трещины
+  ctx.strokeStyle = "rgba(15,14,20,0.6)";
+  ctx.lineWidth = Math.max(1, s * 0.035);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(x + s * 0.3, y + s * 0.44);
+  ctx.lineTo(x + s * 0.46, y + s * 0.56);
+  ctx.lineTo(x + s * 0.4, y + s * 0.72);
+  ctx.moveTo(x + s * 0.63, y + s * 0.28);
+  ctx.lineTo(x + s * 0.58, y + s * 0.5);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -294,6 +386,7 @@ export function drawPieceAt(
   alpha = 1,
   time = 0,
   goalColor?: number,
+  ring?: number,
 ): void {
   const w = piece.shape.w * cell * scale;
   const h = piece.shape.h * cell * scale;
@@ -303,7 +396,7 @@ export function drawPieceAt(
     const x = x0 + dc * cell * scale;
     const y = y0 + dr * cell * scale;
     if (piece.bomb === i && piece.bombTimer !== null) {
-      drawBombBlock(ctx, x, y, cell * scale, piece.bombTimer, time, alpha, i * 1.3);
+      drawBombBlock(ctx, x, y, cell * scale, piece.bombTimer, time, alpha, i * 1.3, ring);
     } else {
       drawBlock(ctx, x, y, cell * scale, piece.color, alpha, goalColor === piece.color);
     }
@@ -341,7 +434,9 @@ export function drawBoard(ctx: CanvasRenderingContext2D, g: GameState, L: Layout
         }
         const off = (1 - sc) * L.cell / 2;
         if (v < 0) {
-          drawBombBlock(ctx, x + off, y + off, L.cell * sc, -v, g.time, 1, r * 0.9 + c * 1.7);
+          drawBombBlock(ctx, x + off, y + off, L.cell * sc, -v, g.time, 1, r * 0.9 + c * 1.7, idleRing(g));
+        } else if (isStone(v)) {
+          drawStoneBlock(ctx, x, y, L.cell);
         } else {
           drawBlock(ctx, x + off, y + off, L.cell * sc, v, 1, g.goalColor === v);
         }
@@ -417,7 +512,7 @@ export function drawTray(ctx: CanvasRenderingContext2D, g: GameState, L: LayoutM
     if (g.anim && g.anim.slot === i) continue;
     const cx = slotW * (i + 0.5);
     const cy = L.trayY + L.trayH / 2;
-    drawPieceAt(ctx, piece, cx, cy, L.cell, TRAY_SCALE, g.dead[i] ? 0.3 : 1, g.time, g.goalColor);
+    drawPieceAt(ctx, piece, cx, cy, L.cell, TRAY_SCALE, g.dead[i] ? 0.3 : 1, g.time, g.goalColor, idleRing(g));
   }
   ctx.restore();
 }

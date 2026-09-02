@@ -3,6 +3,18 @@
 export const GRID_SIZE = 8;
 export const COLOR_COUNT = 8;
 
+/** Фитиль тикает по времени: раз в столько секунд простоя (кольцо-отсчёт
+ *  вокруг бомбы делает ровно один оборот за этот период). */
+export const IDLE_BOMB_TICK = 7;
+
+/** Камень-препятствие: занимает клетку, считается «заполненным» для линий,
+ *  но НЕ уничтожается взрывом линий — только кратером бомбы или молотком. */
+export const STONE = 99;
+
+export function isStone(v: number): boolean {
+  return v === STONE;
+}
+
 /** 0 = пусто, 1..COLOR_COUNT = id цвета блока */
 export type Grid = number[][];
 
@@ -230,7 +242,7 @@ export function generatePieces(
     const pieces: Piece[] = [fresh(), fresh(), fresh()];
     // одна фигура из тройки может нести бомбу (не больше одной на сет);
     // шанс ниже, потому что основные бомбы теперь появляются сами на поле
-    if (allowBomb && Math.random() < Math.min(0.55, 0.25 + 0.3 * t)) {
+    if (allowBomb && Math.random() < Math.min(0.45, 0.2 + 0.28 * t)) {
       const p = pieces[Math.floor(Math.random() * 3)];
       p.bomb = Math.floor(Math.random() * p.shape.cells.length);
       p.bombTimer = bombTimerFor(t);
@@ -339,7 +351,7 @@ export function boardBombCount(grid: Grid): number {
 /** Фитиль полевой бомбы — щедрее фигурной: под неё надо построить линию */
 export function boardBombTimerFor(difficulty: number): number {
   const t = Math.max(0, Math.min(1, difficulty));
-  return Math.max(6, 11 - Math.floor(t * 4));
+  return Math.max(7, 12 - Math.floor(t * 4));
 }
 
 /** Молоток: убрать один блок (в т.ч. бомбу). Возвращает старое значение (0 = пусто) */
@@ -348,6 +360,23 @@ export function applyHammer(grid: Grid, r: number, c: number): number {
   const v = grid[r][c];
   grid[r][c] = 0;
   return v;
+}
+
+/** Расставить камни-препятствия на пустых клетках (стартовая раскладка уровня).
+ *  Камни усложняют поле: их нельзя смыть линией — только взорвать бомбой/молотком. */
+export function spawnStones(grid: Grid, count: number): [number, number][] {
+  const placed: [number, number][] = [];
+  let guard = 0;
+  while (placed.length < count && guard < 500) {
+    guard++;
+    const r = Math.floor(Math.random() * GRID_SIZE);
+    const c = Math.floor(Math.random() * GRID_SIZE);
+    if (grid[r][c] === 0) {
+      grid[r][c] = STONE;
+      placed.push([r, c]);
+    }
+  }
+  return placed;
 }
 
 /** Ходов между появлениями полевых бомб (давление растёт со сложностью) */

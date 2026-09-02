@@ -56,7 +56,8 @@ export class Sfx {
     this.tone(190, 0.09, "triangle", 0.12, 0, 280);
   }
 
-  fail(): void {
+  /** Глухой тык — фигуру вернули в лоток / некуда ставить */
+  bump(): void {
     this.tone(150, 0.1, "sawtooth", 0.04, 0, 90);
   }
 
