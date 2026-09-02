@@ -105,6 +105,8 @@ export interface GameState {
   idleAcc: number;
   /** сколько блоков цвета цели убрано (для цели «собери») */
   collected: number;
+  /** цвет цели collect-уровня — такие блоки подсвечиваются */
+  goalColor?: number;
   /** молоток взведён — следующий тап по блоку сносит его */
   armed: boolean;
   /** клетка под прицелом молотка */
@@ -131,7 +133,7 @@ export function roundRect(
   ctx.closePath();
 }
 
-/** Один «конфетный» блок с градиентом и блеском */
+/** Один «конфетный» блок с градиентом и блеском; highlight — блок цвета цели */
 export function drawBlock(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -139,6 +141,7 @@ export function drawBlock(
   s: number,
   colorIdx: number,
   alpha = 1,
+  highlight = false,
 ): void {
   const col = BLOCK_COLORS[((colorIdx - 1) % BLOCK_COLORS.length + BLOCK_COLORS.length) % BLOCK_COLORS.length];
   const pad = s * 0.05;
@@ -161,6 +164,14 @@ export function drawBlock(
   ctx.lineWidth = Math.max(1, s * 0.035);
   roundRect(ctx, x + pad, y + pad, w, w, r);
   ctx.stroke();
+  // подсветка цвета цели: пульсирующая белая рамка
+  if (highlight) {
+    const pulse = 0.55 + 0.45 * Math.sin(performance.now() / 300);
+    ctx.strokeStyle = `rgba(255,255,255,${(0.95 * alpha * (0.6 + 0.4 * pulse)).toFixed(3)})`;
+    ctx.lineWidth = Math.max(1.5, s * 0.07);
+    roundRect(ctx, x + pad, y + pad, w, w, r);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -218,6 +229,7 @@ export function drawPieceAt(
   scale: number,
   alpha = 1,
   time = 0,
+  goalColor?: number,
 ): void {
   const w = piece.shape.w * cell * scale;
   const h = piece.shape.h * cell * scale;
@@ -229,7 +241,7 @@ export function drawPieceAt(
     if (piece.bomb === i && piece.bombTimer !== null) {
       drawBombBlock(ctx, x, y, cell * scale, piece.bombTimer, time, alpha);
     } else {
-      drawBlock(ctx, x, y, cell * scale, piece.color, alpha);
+      drawBlock(ctx, x, y, cell * scale, piece.color, alpha, goalColor === piece.color);
     }
   });
 }
@@ -267,7 +279,7 @@ export function drawBoard(ctx: CanvasRenderingContext2D, g: GameState, L: Layout
         if (v < 0) {
           drawBombBlock(ctx, x + off, y + off, L.cell * sc, -v, g.time, 1);
         } else {
-          drawBlock(ctx, x + off, y + off, L.cell * sc, v, 1);
+          drawBlock(ctx, x + off, y + off, L.cell * sc, v, 1, g.goalColor === v);
         }
       }
     }
@@ -341,7 +353,7 @@ export function drawTray(ctx: CanvasRenderingContext2D, g: GameState, L: LayoutM
     if (g.anim && g.anim.slot === i) continue;
     const cx = slotW * (i + 0.5);
     const cy = L.trayY + L.trayH / 2;
-    drawPieceAt(ctx, piece, cx, cy, L.cell, TRAY_SCALE, g.dead[i] ? 0.3 : 1, g.time);
+    drawPieceAt(ctx, piece, cx, cy, L.cell, TRAY_SCALE, g.dead[i] ? 0.3 : 1, g.time, g.goalColor);
   }
   ctx.restore();
 }

@@ -83,7 +83,9 @@ export interface Strings {
   hintLines: (target: number, moves: number) => string;
   hintScore: (target: number, moves: number) => string;
   hintDefuse: (target: number) => string;
-  hintCollect: (target: number) => string;
+  hintCollect: (target: number, colorName: string) => string;
+  /** названия цветов блоков для подсказок collect-уровней */
+  colorNames: string[];
   // canvas-тексты
   mega: string;
   triple: string;
@@ -144,7 +146,8 @@ const ru: Strings = {
   hintLines: (target, moves) => `Взорви ${target} линий за ${moves} ходов`,
   hintScore: (target, moves) => `Набери ${target} очков за ${moves} ходов`,
   hintDefuse: (target) => `Обезвредь ${target} бомб: закрывай их линиями`,
-  hintCollect: (target) => `Убери ${target} блоков нужного цвета из взрываемых линий`,
+  hintCollect: (target, colorName) => `Убери ${target} блоков «${colorName}» из взрываемых линий — они подсвечены рамкой и выпадают чаще`,
+  colorNames: ["Коралл", "Янтарь", "Изумруд", "Роза", "Аметист", "Бирюза", "Апельсин", "Лайм"],
   mega: "МЕГА УДАР!",
   triple: "ТРОЙНАЯ!",
   double: "ДВОЙНАЯ!",
@@ -204,7 +207,8 @@ const en: Strings = {
   hintLines: (target, moves) => `Blast ${target} lines in ${moves} moves`,
   hintScore: (target, moves) => `Score ${target} points in ${moves} moves`,
   hintDefuse: (target) => `Defuse ${target} bombs: clear them with full lines`,
-  hintCollect: (target) => `Clear ${target} blocks of the target color from blasted lines`,
+  hintCollect: (target, colorName) => `Clear ${target} "${colorName}" blocks from blasted lines — they glow with a border and drop more often`,
+  colorNames: ["Coral", "Amber", "Emerald", "Rose", "Amethyst", "Turquoise", "Orange", "Lime"],
   mega: "MEGA BLAST!",
   triple: "TRIPLE!",
   double: "DOUBLE!",

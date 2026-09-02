@@ -106,11 +106,18 @@ function makeInitialGame(level: LevelDef): GameState {
     nextBombAt: level.bombsFrom,
     idleAcc: 0,
     collected: 0,
+    goalColor: level.goal.type === "collect" ? level.goal.color : undefined,
     armed: false,
     hammerTarget: null,
     overReason: null,
     over: false,
   };
+}
+
+/** Генерация с подмешиванием цвета цели: иначе collect-цели недостижимы */
+function piecesFor(level: LevelDef, grid: Grid, allowBomb: boolean): Piece[] {
+  const bias = level.goal.type === "collect" ? level.goal.color : undefined;
+  return generatePieces(grid, level.diff, allowBomb, bias);
 }
 
 function refreshDead(g: GameState): void {
@@ -164,7 +171,7 @@ export default function GameScreen({
   // Инициализация: фигуры сразу
   useEffect(() => {
     const g = gameRef.current;
-    g.pieces = generatePieces(g.grid, level.diff);
+    g.pieces = piecesFor(level, g.grid, false);
     refreshDead(g);
     return () => {
       timersRef.current.forEach((t) => window.clearTimeout(t));
@@ -192,6 +199,9 @@ export default function GameScreen({
           lines: g.lines,
           defused: g.defused,
           collected: g.collected,
+          goalColor: g.goalColor ?? null,
+          trayColors: g.pieces.map((p) => (p ? p.color : null)),
+          grid: g.grid.map((row) => row.slice()),
           phase: phaseRef.current,
           over: g.over,
           reason: g.overReason,
@@ -479,7 +489,7 @@ export default function GameScreen({
 
       // 5. пополнение лотка
       if (g.pieces.every((p) => p === null)) {
-        g.pieces = generatePieces(g.grid, level.diff, level.pieceBombs && g.placements >= 6);
+        g.pieces = piecesFor(level, g.grid, level.pieceBombs && g.placements >= 6);
       }
       refreshDead(g);
 
@@ -589,7 +599,7 @@ export default function GameScreen({
   const useShuffle = useCallback(() => {
     const g = gameRef.current;
     if (phaseRef.current !== "play" || boosters.shuffle <= 0) return;
-    const fresh = generatePieces(g.grid, level.diff, level.pieceBombs && g.placements >= 6);
+    const fresh = piecesFor(level, g.grid, level.pieceBombs && g.placements >= 6);
     g.pieces = g.pieces.map((p, i) => (p ? fresh[i] : null));
     refreshDead(g);
     const L = layoutRef.current;
@@ -730,7 +740,7 @@ export default function GameScreen({
   const restart = useCallback(() => {
     const g = gameRef.current;
     g.grid = emptyGrid();
-    g.pieces = generatePieces(g.grid, level.diff);
+    g.pieces = piecesFor(level, g.grid, false);
     g.dead = [false, false, false];
     g.drag = null;
     g.anim = null;

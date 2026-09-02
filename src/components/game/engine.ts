@@ -181,8 +181,18 @@ export function difficultyOf(score: number): number {
   return Math.min(1, score / 2500);
 }
 
-/** Тройка новых фигур; гарантирует, что хотя бы одна влезает на поле */
-export function generatePieces(grid: Grid, difficulty: number, allowBomb = false): Piece[] {
+/** Доля фигур цвета цели на collect-уровнях (подмешивается в генерацию) */
+export const COLOR_BIAS = 0.4;
+
+/** Тройка новых фигур; гарантирует, что хотя бы одна влезает на поле.
+ *  colorBias — цвет цели collect-уровня: фигуры этого цвета выпадают заметно чаще,
+ *  иначе цель "собери N блоков цвета" математически недостижима. */
+export function generatePieces(
+  grid: Grid,
+  difficulty: number,
+  allowBomb = false,
+  colorBias?: number,
+): Piece[] {
   const t = Math.max(0, Math.min(1, difficulty));
   const smallBias = 1 - 0.5 * t;
   const bigBias = 0.35 + 1.9 * t;
@@ -199,7 +209,17 @@ export function generatePieces(grid: Grid, difficulty: number, allowBomb = false
     }
     return SHAPES[0];
   };
-  const randColor = () => 1 + Math.floor(Math.random() * COLOR_COUNT);
+  const randColor = () => {
+    if (
+      colorBias !== undefined &&
+      colorBias >= 1 &&
+      colorBias <= COLOR_COUNT &&
+      Math.random() < COLOR_BIAS
+    ) {
+      return colorBias;
+    }
+    return 1 + Math.floor(Math.random() * COLOR_COUNT);
+  };
   const fresh = (): Piece => ({ shape: pick(), color: randColor(), bomb: null, bombTimer: null });
 
   for (let attempt = 0; attempt < 12; attempt++) {

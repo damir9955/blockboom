@@ -40,7 +40,8 @@ function buildLevels(): LevelDef[] {
         movesBonus = 2;
         break;
       case 2:
-        goal = { type: "collect", target: clamp(12 + Math.floor(n * 0.9), 12, 42), color: 1 + ((n * 3) % 8) };
+        // цель достижима благодаря подмешиванию цвета в генератор (COLOR_BIAS)
+        goal = { type: "collect", target: clamp(12 + Math.floor(n * 0.32), 12, 24), color: 1 + ((n * 3) % 8) };
         break;
       case 3:
         goal = { type: "defuse", target: clamp(1 + Math.floor((n - 1) / 6), 1, 6) };
@@ -66,7 +67,7 @@ function buildLevels(): LevelDef[] {
   // Ручная калибровка первых уровней (туториальная плавность)
   out[1] = { ...out[1], goal: { type: "lines", target: 3 }, moves: 26 }; // уровень 2
   out[2] = { ...out[2], goal: { type: "score", target: 600 }, moves: 26 }; // уровень 3
-  out[4] = { ...out[4], goal: { type: "collect", target: 14, color: 2 }, moves: 26 }; // уровень 5
+  out[4] = { ...out[4], goal: { type: "collect", target: 12, color: 2 }, moves: 26 }; // уровень 5
   out[5] = { ...out[5], goal: { type: "defuse", target: 2 }, moves: 26 }; // уровень 6
   out[6] = { ...out[6], goal: { type: "lines", target: 5 }, moves: 28 }; // уровень 7
   // на уровнях «обезвредь бомбы» бомбы обязаны появляться щедро (после оверрайдов!)
@@ -130,7 +131,7 @@ export function goalHint(level: LevelDef, lang: Lang = "ru"): string {
     case "defuse":
       return t.hintDefuse(level.goal.target);
     case "collect":
-      return t.hintCollect(level.goal.target);
+      return t.hintCollect(level.goal.target, t.colorNames[(level.goal.color ?? 1) - 1] ?? "");
   }
 }
 
