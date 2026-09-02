@@ -11,9 +11,12 @@ import {
   Plus,
   RotateCcw,
   Shuffle,
+  ShoppingCart,
   Star,
+  Video,
   Volume2,
   VolumeX,
+  X,
 } from "lucide-react";
 import {
   applyHammer,
@@ -63,7 +66,7 @@ import {
 } from "./render";
 import { coinsFor, collectGoal, goalProgressTexts, goalReached, scoreMultiplier, starsFor, type LevelDef } from "./levels";
 import { tr, type Lang, type Strings } from "./i18n";
-import type { BoosterKind } from "./progress";
+import { PRICES, type BoosterKind } from "./progress";
 
 export interface LevelResult {
   levelN: number;
@@ -77,13 +80,24 @@ interface Props {
   level: LevelDef;
   firstClear: boolean;
   boosters: { hammer: number; shuffle: number; plus5: number };
+  /** баланс монет — для магазина внутри уровня */
+  coins: number;
   muted: boolean;
   lang: Lang;
   onToggleMute: () => void;
   onUseBooster: (kind: BoosterKind) => void;
+  /** покупка бустера; false — не хватило монет */
+  onBuyBooster: (kind: BoosterKind) => boolean;
+  /** награда за просмотр рекламы; возвращает новый баланс монет */
+  onAdReward: (reward: number) => number;
+  /** сколько монет даёт реклама */
+  adReward: number;
   onLevelEnd: (result: LevelResult, goNext: boolean) => void;
   onExit: () => void;
 }
+
+/** длительность демо-«рекламы», секунд */
+const AD_SECONDS = 5;
 
 function makeInitialGame(level: LevelDef): GameState {
   const grid = emptyGrid();
@@ -131,10 +145,14 @@ export default function GameScreen({
   level,
   firstClear,
   boosters,
+  coins,
   muted,
   lang,
   onToggleMute,
   onUseBooster,
+  onBuyBooster,
+  onAdReward,
+  adReward,
   onLevelEnd,
   onExit,
 }: Props) {
@@ -162,6 +180,53 @@ export default function GameScreen({
   const [armed, setArmed] = useState(false);
   // задачи уровня подсвечиваются на старте (~4 секунды), чтобы было ясно, что делать
   const [goalFlash, setGoalFlash] = useState(true);
+
+  // ── Магазин внутри уровня (покупка бустеров не выходя в меню) ──────────
+  const [shopOpen, setShopOpen] = useState(false);
+  const shopOpenRef = useRef(false);
+  const openShop = useCallback(() => {
+    shopOpenRef.current = true;
+    setShopOpen(true);
+  }, []);
+  const closeShop = useCallback(() => {
+    shopOpenRef.current = false;
+    setShopOpen(false);
+  }, []);
+
+  // ── «Реклама» за монеты: 5 секунд демо-ролика → +adReward монет ────────
+  const [adPlaying, setAdPlaying] = useState(false);
+  const adPlayingRef = useRef(false);
+  const [adLeft, setAdLeft] = useState(AD_SECONDS * 1000);
+  const [adDone, setAdDone] = useState(false);
+  /** бустер, ради которого смотрят рекламу (сразу докупается после награды) */
+  const [adPending, setAdPending] = useState<BoosterKind | null>(null);
+  const startAd = useCallback((pending: BoosterKind | null) => {
+    adPlayingRef.current = true;
+    setAdLeft(AD_SECONDS * 1000);
+    setAdDone(false);
+    setAdPlaying(true);
+    setAdPending(pending);
+  }, []);
+  const endAd = useCallback(() => {
+    adPlayingRef.current = false;
+    setAdPlaying(false);
+    setAdPending(null);
+  }, []);
+
+  // отсчёт рекламы: 5 секунд, потом кнопка награды
+  useEffect(() => {
+    if (!adPlaying) return;
+    const started = performance.now();
+    const id = window.setInterval(() => {
+      const left = Math.max(0, AD_SECONDS * 1000 - (performance.now() - started));
+      setAdLeft(left);
+      if (left <= 0) {
+        window.clearInterval(id);
+        setAdDone(true);
+      }
+    }, 100);
+    return () => window.clearInterval(id);
+  }, [adPlaying]);
 
   const getSfx = useCallback((): Sfx => {
     if (!sfxRef.current) sfxRef.current = new Sfx();
@@ -192,6 +257,14 @@ export default function GameScreen({
     if (sfxRef.current) sfxRef.current.muted = muted;
   }, [muted]);
 
+  // живые значения монет/бустеров для dev-хука (e2e)
+  const coinsRef = useRef(coins);
+  const boostersRef = useRef(boosters);
+  useEffect(() => {
+    coinsRef.current = coins;
+    boostersRef.current = boosters;
+  }, [coins, boosters]);
+
   // Отладочный хук для e2e-тестов (только в dev-сборке)
   useEffect(() => {
     if (process.env.NODE_ENV !== "production") {
@@ -216,10 +289,15 @@ export default function GameScreen({
           phase: phaseRef.current,
           over: g.over,
           reason: g.overReason,
+          coins: coinsRef.current,
+          boosters: { ...boostersRef.current },
+          shopOpen: shopOpenRef.current,
+          adPlaying: adPlayingRef.current,
+          adPending,
         };
       };
     }
-  }, [level]);
+  }, [level, adPending]);
 
   // Адаптивный размер canvas
   useEffect(() => {
@@ -302,8 +380,10 @@ export default function GameScreen({
       const L = layoutRef.current;
       const canvas = canvasRef.current;
       // фитиль горит и по времени: каждые IDLE_BOMB_TICK (7) секунд простоя — тик;
-      // сгорающее кольцо вокруг бомбы делает ровно один оборот за этот период
-      if (!g.over && g.idleAcc + dt >= IDLE_BOMB_TICK) {
+      // сгорающее кольцо вокруг бомбы делает ровно один оборот за этот период.
+      // Пока открыт магазин или «реклама» — время стоит: бомбы не горят
+      const paused = shopOpenRef.current || adPlayingRef.current;
+      if (!g.over && !paused && g.idleAcc + dt >= IDLE_BOMB_TICK) {
         g.idleAcc = 0;
         const hasBombs =
           boardBombCount(g.grid) > 0 || g.pieces.some((p) => p && p.bombTimer !== null);
@@ -321,7 +401,7 @@ export default function GameScreen({
             sfx.tick();
           }
         }
-      } else {
+      } else if (!paused) {
         g.idleAcc += dt;
       }
       if (canvas) {
@@ -657,6 +737,52 @@ export default function GameScreen({
     onUseBooster("plus5");
   }, [boosters.plus5, getSfx, onUseBooster, t]);
 
+  // ── Магазин внутри уровня: покупка, а при нехватке монет — реклама ─────
+  const tryBuy = useCallback(
+    (kind: BoosterKind) => {
+      if (phaseRef.current !== "play") return;
+      const price = PRICES[kind];
+      if (coins >= price) {
+        if (onBuyBooster(kind)) {
+          getSfx().coin();
+          vibrate(12);
+        }
+        return;
+      }
+      // не хватило монет — предлагаем посмотреть рекламу (+adReward)
+      startAd(kind);
+    },
+    [coins, getSfx, onBuyBooster, startAd],
+  );
+
+  // Награда за просмотренную рекламу; ждущий бустер докупается сразу
+  const claimAd = useCallback(() => {
+    if (!adDone) return;
+    const kind = adPending;
+    const newCoins = onAdReward(adReward);
+    getSfx().coin();
+    vibrate([15, 30, 15]);
+    endAd();
+    if (kind && newCoins >= PRICES[kind] && onBuyBooster(kind)) {
+      const g = gameRef.current;
+      const L = layoutRef.current;
+      g.texts.push({
+        x: L.boardX + (GRID_SIZE / 2) * L.cell,
+        y: L.boardY + 2 * L.cell,
+        text: t.adRewarded(adReward),
+        color: "#ffd34d",
+        size: 18,
+        life: 1.4,
+        maxLife: 1.4,
+      });
+    }
+  }, [adDone, adPending, adReward, endAd, getSfx, onAdReward, onBuyBooster, t]);
+
+  // закрыть рекламу до конца — без награды
+  const abortAd = useCallback(() => {
+    endAd();
+  }, [endAd]);
+
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const g = gameRef.current;
     if (phaseRef.current !== "play") return;
@@ -801,9 +927,19 @@ export default function GameScreen({
     // задачи снова подсвечиваются после рестарта
     setGoalFlash(true);
     addTimer(window.setTimeout(() => setGoalFlash(false), 4000));
-  }, [level]);
+    // рестарт возможен и из окна победы (<3 звёзд) — закрываем магазин/рекламу
+    closeShop();
+    endAd();
+  }, [level, closeShop, endAd]);
 
   const goalChips = goalProgressTexts(level, { lines: linesCleared, defused, collected, score }, lang);
+
+  // товары магазина внутри уровня (цены — из progress.ts)
+  const shopItems: { kind: BoosterKind; label: string; icon: typeof Hammer; price: number; count: number; tone: string }[] = [
+    { kind: "hammer", label: t.hammer, icon: Hammer, price: PRICES.hammer, count: boosters.hammer, tone: "bg-rose-500" },
+    { kind: "shuffle", label: t.shuffle, icon: Shuffle, price: PRICES.shuffle, count: boosters.shuffle, tone: "bg-teal-500" },
+    { kind: "plus5", label: `+${t.plus5}`, icon: Plus, price: PRICES.plus5, count: boosters.plus5, tone: "bg-amber-500" },
+  ];
 
   const resultPayload = (won: boolean): LevelResult => ({
     levelN: level.n,
@@ -963,13 +1099,35 @@ export default function GameScreen({
                 >
                   {t.nextLevel}
                 </button>
-                <button
-                  type="button"
-                  onClick={handleToMap}
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-bold text-white/70 transition active:scale-95 hover:bg-white/10"
-                >
-                  {t.toMap}
-                </button>
+                {/* меньше 3 звёзд — небольшая кнопка повтора, чтобы улучшить результат */}
+                {(result?.stars ?? 0) < 3 ? (
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={restart}
+                      aria-label={t.retryImprove}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-amber-400/30 bg-amber-400/10 py-2 text-sm font-bold text-amber-300 transition active:scale-95 hover:bg-amber-400/20"
+                    >
+                      <RotateCcw className="size-4" aria-hidden="true" />
+                      {t.retryImprove}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleToMap}
+                      className="flex-1 rounded-xl border border-white/10 bg-white/5 py-2 text-sm font-bold text-white/70 transition active:scale-95 hover:bg-white/10"
+                    >
+                      {t.toMap}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleToMap}
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-bold text-white/70 transition active:scale-95 hover:bg-white/10"
+                  >
+                    {t.toMap}
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -1011,8 +1169,8 @@ export default function GameScreen({
 
         </div>
 
-        {/* Бустеры */}
-        <div className="mt-3 grid grid-cols-3 gap-2">
+        {/* Бустеры + магазин */}
+        <div className="mt-3 grid grid-cols-4 gap-2">
           <button
             type="button"
             onClick={toggleHammer}
@@ -1062,7 +1220,159 @@ export default function GameScreen({
               </span>
             )}
           </button>
+          {/* магазин внутри уровня: покупка бустеров, не выходя в меню */}
+          <button
+            type="button"
+            onClick={openShop}
+            disabled={phase !== "play"}
+            aria-label={t.shopAria}
+            className="relative flex items-center justify-center gap-1.5 rounded-xl border border-amber-400/30 bg-amber-400/10 py-2.5 text-xs font-bold text-amber-300 transition active:scale-95 hover:bg-amber-400/20 disabled:opacity-35"
+          >
+            <ShoppingCart className="size-4" aria-hidden="true" />
+            {t.shop}
+            <span
+              className="absolute -right-1.5 -top-1.5 grid min-w-5 place-items-center rounded-full bg-amber-500 px-1 text-[10px] font-black text-white tabular-nums"
+              aria-hidden="true"
+            >
+              {coins}
+            </span>
+          </button>
         </div>
+
+        {/* ── Магазин внутри уровня ─────────────────────────────────────── */}
+        {shopOpen && phase === "play" && !adPlaying && (
+          <div
+            className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t.shopAria}
+          >
+            <div className="w-[88%] max-w-xs rounded-2xl border border-white/10 bg-[#1c1a24] p-5 shadow-2xl">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-black uppercase tracking-widest text-white/70">{t.shop}</div>
+                <div
+                  className="flex items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1 text-sm font-black text-amber-300 tabular-nums"
+                  aria-label={t.shopCoinsAria(coins)}
+                >
+                  <Coins className="size-4" aria-hidden="true" />
+                  {coins}
+                </div>
+              </div>
+              <div className="mt-4 flex flex-col gap-2">
+                {shopItems.map(({ kind, label, icon: Icon, price, count, tone }) => {
+                  const afford = coins >= price;
+                  return (
+                    <div
+                      key={kind}
+                      className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3"
+                    >
+                      <span className="relative shrink-0">
+                        <span className={`grid size-10 place-items-center rounded-lg ${tone}`}>
+                          <Icon className="size-5 text-white" aria-hidden="true" />
+                        </span>
+                        <span
+                          className="absolute -right-2 -top-1.5 grid min-w-5 place-items-center rounded-full bg-white px-1 text-[10px] font-black text-black"
+                          aria-label={t.have(count)}
+                        >
+                          {count}
+                        </span>
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-bold text-white/85">{label}</div>
+                        <div className="mt-0.5 flex items-center gap-1 text-xs font-black text-amber-300 tabular-nums">
+                          <Coins className="size-3" aria-hidden="true" />
+                          {price}
+                        </div>
+                        {!afford && (
+                          <div className="mt-0.5 whitespace-nowrap text-[11px] leading-tight text-rose-300/80" aria-label={t.needed(price - coins)}>
+                            {t.needed(price - coins)}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => tryBuy(kind)}
+                        aria-label={afford ? t.buyAria(label, price, count) : t.adCtaAria(adReward)}
+                        className={
+                          afford
+                            ? "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-gradient-to-b from-amber-400 to-orange-500 px-3.5 py-2 text-xs font-black text-[#221a08] shadow-md shadow-orange-950/40 transition active:scale-95"
+                            : "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-teal-400/40 bg-teal-400/10 px-3.5 py-2 text-xs font-black text-teal-300 transition active:scale-95 hover:bg-teal-400/20"
+                        }
+                      >
+                        {afford ? (
+                          <>
+                            <Coins className="size-3.5" aria-hidden="true" />
+                            {t.buy}
+                          </>
+                        ) : (
+                          <>
+                            <Video className="size-3.5" aria-hidden="true" />
+                            {t.adCta(adReward)}
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={closeShop}
+                className="mt-4 w-full rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-bold text-white/70 transition active:scale-95 hover:bg-white/10"
+              >
+                {t.close}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── «Реклама» за монеты (демо: сюда позже встанет реальный ролик) ── */}
+        {adPlaying && (
+          <div
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/95"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t.adTitle}
+          >
+            <button
+              type="button"
+              onClick={abortAd}
+              aria-label={t.adCloseAria}
+              className="absolute right-4 top-4 rounded-xl border border-white/10 bg-white/5 p-2.5 text-white/60 transition active:scale-90 hover:bg-white/10"
+            >
+              <X className="size-4" />
+            </button>
+            <div className="w-[86%] max-w-xs rounded-2xl border border-white/10 bg-[#14121b] p-5 text-center shadow-2xl">
+              <div className="text-[10px] font-black uppercase tracking-[0.3em] text-white/35">{t.adTitle}</div>
+              <div className="mt-3 grid h-36 place-items-center rounded-xl bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 animate-pulse">
+                <div className="flex flex-col items-center gap-1.5 text-white">
+                  <Bomb className="size-10" aria-hidden="true" />
+                  <div className="text-lg font-black tracking-wide">{t.appName}</div>
+                </div>
+              </div>
+              <div className="mt-3 text-[11px] leading-snug text-white/40">{t.adNote}</div>
+              <div className="mt-4" aria-hidden="true">
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full rounded-full bg-amber-400"
+                    style={{ width: `${(1 - adLeft / (AD_SECONDS * 1000)) * 100}%` }}
+                  />
+                </div>
+                <div className="mt-1.5 text-xs font-bold tabular-nums text-white/50">
+                  {t.adSeconds(Math.ceil(adLeft / 1000))}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={claimAd}
+                disabled={!adDone}
+                className="mt-4 w-full rounded-xl bg-gradient-to-b from-amber-400 to-orange-500 py-3 text-sm font-black text-[#221a08] shadow-lg shadow-orange-950/50 transition active:scale-95 disabled:opacity-40"
+              >
+                {t.adClaim(adReward)}
+              </button>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

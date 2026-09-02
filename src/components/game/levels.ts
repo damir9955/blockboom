@@ -227,8 +227,10 @@ export function starsFor(movesLeftRatio: number, livesLost: number): number {
   return 1;
 }
 
-export const COIN_REPLAY = 20;
+/** Монеты за победу: первый раз — крупно, реплей — скромно.
+ *  Чуть послабее прежнего (было 50+40*зв и 20), чтобы реклама «+110» была в тему. */
+export const COIN_REPLAY = 15;
 
 export function coinsFor(stars: number, firstClear: boolean): number {
-  return firstClear ? 50 + 40 * stars : COIN_REPLAY;
+  return firstClear ? 45 + 35 * stars : COIN_REPLAY;
 }

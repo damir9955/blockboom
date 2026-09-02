@@ -6,6 +6,7 @@ import MapScreen from "@/components/game/MapScreen";
 import { LEVELS } from "@/components/game/levels";
 import { detectLang, saveLang, type Lang } from "@/components/game/i18n";
 import {
+  AD_COIN_REWARD,
   awardLevel,
   buyBooster,
   firstClearOf,
@@ -77,8 +78,23 @@ export default function Home() {
     applyProgress((p) => spendBooster(p, kind));
   };
 
-  const handleBuy = (kind: BoosterKind) => {
-    applyProgress((p) => buyBooster(p, kind));
+  const handleBuy = (kind: BoosterKind): boolean => {
+    // покупка прямо в игре: false — не хватило монет (тогда игра предложит рекламу)
+    const next = buyBooster(progressRef.current, kind);
+    if (!next) return false;
+    progressRef.current = next;
+    setProgress(next);
+    saveProgress(next);
+    return true;
+  };
+
+  /** Награда за просмотр рекламы: +N монет; возвращает новый баланс */
+  const handleAdReward = (reward: number): number => {
+    const next = { ...progressRef.current, coins: progressRef.current.coins + reward };
+    progressRef.current = next;
+    setProgress(next);
+    saveProgress(next);
+    return next.coins;
   };
 
   const handleToggleMute = () => {
@@ -112,10 +128,14 @@ export default function Home() {
           level={level}
           firstClear={firstClearOf(progress, levelN)}
           boosters={progress.boosters}
+          coins={progress.coins}
           muted={progress.muted}
           lang={lang}
           onToggleMute={handleToggleMute}
           onUseBooster={handleUseBooster}
+          onBuyBooster={handleBuy}
+          onAdReward={handleAdReward}
+          adReward={AD_COIN_REWARD}
           onLevelEnd={handleLevelEnd}
           onExit={handleExit}
         />
