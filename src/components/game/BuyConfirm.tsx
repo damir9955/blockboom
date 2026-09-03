@@ -1,30 +1,23 @@
 "use client";
 
+// ── Подтверждение покупки бустера (без заголовка — сразу суть) ───────────────
+
 import type { ReactNode } from "react";
 import { Coins } from "lucide-react";
 import { tr, type Lang } from "./i18n";
 
-interface Props {
+interface BuyConfirmProps {
   lang: Lang;
-  /** название предмета */
   name: string;
-  /** цена в монетах */
   price: number;
-  /** сколько уже есть у игрока */
   count: number;
-  /** тон плашки иконки (bg-rose-500 / bg-teal-500 / bg-amber-500) */
   tone: string;
-  /** иконка предмета */
   icon: ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
 }
 
-/**
- * Диалог покупки: «Купить X за N монет?» — защита от случайного тапа.
- * Единый диалог и для магазина в главном меню, и для магазина во время игры.
- */
-export default function BuyConfirm({ lang, name, price, count, tone, icon, onConfirm, onCancel }: Props) {
+export default function BuyConfirm({ lang, name, price, count, tone, icon, onConfirm, onCancel }: BuyConfirmProps) {
   const t = tr(lang);
   return (
     <div

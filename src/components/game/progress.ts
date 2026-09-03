@@ -24,9 +24,6 @@ export const START_PROGRESS: Progress = {
   muted: false,
 };
 
-/** Награда за просмотр рекламы (монеты) */
-export const AD_COIN_REWARD = 110;
-
 export const PRICES: Record<BoosterKind, number> = {
   hammer: 100,
   shuffle: 150,

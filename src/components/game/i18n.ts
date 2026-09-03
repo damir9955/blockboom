@@ -53,6 +53,7 @@ export interface Strings {
   score: string;
   streakChip: (mult: string) => string;
   goalAria: (label: string, now: number, target: number) => string;
+  goalsAria: string;
   livesAria: (n: number) => string;
   exitAria: string;
   boardAria: string;
@@ -63,30 +64,6 @@ export interface Strings {
   nextLevel: string;
   toMap: string;
   retryImprove: string;
-  // магазин во время игры
-  shop: string;
-  shopAria: string;
-  shopCoinsAria: (n: number) => string;
-  buy: string;
-  have: (n: number) => string;
-  needed: (n: number) => string;
-  close: string;
-  // пополнение баланса (одна общая кнопка и в меню, и в магазине в игре)
-  topUp: (n: number) => string;
-  topUpNote: string;
-  topUpAria: (n: number) => string;
-  // диалог покупки
-  confirmBuyText: (name: string, price: number) => string;
-  cancel: string;
-  // реклама (награда за просмотр)
-  adTitle: string;
-  adNote: string;
-  adSeconds: (s: number) => string;
-  adClaim: (n: number) => string;
-  adCloseAria: string;
-  // нативная реклама (Yandex Mobile Ads внутри Android-приложения)
-  adLoading: string;
-  adUnavailable: string;
   // оверлей поражения
   levelFailed: (n: number) => string;
   loseMoves: string;
@@ -98,8 +75,29 @@ export interface Strings {
   hammerAria: (n: number) => string;
   shuffleAria: (n: number) => string;
   plus5Aria: (n: number) => string;
-  // строка задач сверху
-  goalsAria: string;
+  // магазин в игре
+  shop: string;
+  shopAria: string;
+  shopCoinsAria: (n: number) => string;
+  buy: string;
+  have: (n: number) => string;
+  needed: (n: number) => string;
+  close: string;
+  // пополнение за рекламу
+  topUp: (n: number) => string;
+  topUpNote: string;
+  topUpAria: (n: number) => string;
+  // подтверждение покупки
+  confirmBuyText: (name: string, price: number) => string;
+  cancel: string;
+  // реклама
+  adTitle: string;
+  adNote: string;
+  adSeconds: (s: number) => string;
+  adClaim: (n: number) => string;
+  adCloseAria: string;
+  adLoading: string;
+  adUnavailable: string;
   // цели (levels.ts)
   goalLines: string;
   goalScore: string;
@@ -109,7 +107,6 @@ export interface Strings {
   hintScore: (target: number, moves: number) => string;
   hintDefuse: (target: number) => string;
   hintCollect: (target: number, colorName: string) => string;
-  /** названия цветов блоков для подсказок collect-уровней */
   colorNames: string[];
   // canvas-тексты
   mega: string;
@@ -144,6 +141,7 @@ const ru: Strings = {
   score: "Очки",
   streakChip: (mult) => `Серия ×${mult}`,
   goalAria: (label, now, target) => `Цель уровня: ${label} ${now} из ${target}`,
+  goalsAria: "Задачи уровня",
   livesAria: (n) => `Жизни: ${n} из 3`,
   exitAria: "Выйти на карту уровней",
   boardAria: "Игровое поле: перетаскивай фигуры из нижнего лотка на сетку",
@@ -154,6 +152,15 @@ const ru: Strings = {
   nextLevel: "Следующий уровень",
   toMap: "На карту",
   retryImprove: "Повторить",
+  levelFailed: (n) => `Уровень ${n} не пройден`,
+  loseMoves: "Ходы закончились!",
+  loseBombs: "Бабах! Бомбы одолели",
+  loseStall: "Фигуры больше не помещаются",
+  goalLine: (label, now, target) => `Цель: ${label} ${now}/${target}`,
+  retry: "Повторить",
+  hammerAria: (n) => `Молоток: разбить один блок, осталось ${n}`,
+  shuffleAria: (n) => `Перемешать фигуры в лотке, осталось ${n}`,
+  plus5Aria: (n) => `Пять дополнительных ходов, осталось ${n}`,
   shop: "Магазин",
   shopAria: "Магазин: купить бустеры за монеты, не покидая уровень",
   shopCoinsAria: (n) => `Монеты: ${n}`,
@@ -173,16 +180,6 @@ const ru: Strings = {
   adCloseAria: "Закрыть рекламу без награды",
   adLoading: "Загрузка рекламы…",
   adUnavailable: "Реклама недоступна — попробуйте позже",
-  levelFailed: (n) => `Уровень ${n} не пройден`,
-  loseMoves: "Ходы закончились!",
-  loseBombs: "Бабах! Бомбы одолели",
-  loseStall: "Фигуры больше не помещаются",
-  goalLine: (label, now, target) => `Цель: ${label} ${now}/${target}`,
-  retry: "Повторить",
-  hammerAria: (n) => `Молоток: разбить один блок, осталось ${n}`,
-  shuffleAria: (n) => `Перемешать фигуры в лотке, осталось ${n}`,
-  plus5Aria: (n) => `Пять дополнительных ходов, осталось ${n}`,
-  goalsAria: "Задачи уровня",
   goalLines: "Линии",
   goalScore: "Очки",
   goalDefuse: "Обезвредь",
@@ -190,7 +187,8 @@ const ru: Strings = {
   hintLines: (target, moves) => `Взорви ${target} линий за ${moves} ходов`,
   hintScore: (target, moves) => `Набери ${target} очков за ${moves} ходов`,
   hintDefuse: (target) => `Обезвредь ${target} бомб: закрывай их линиями`,
-  hintCollect: (target, colorName) => `Убери ${target} блоков «${colorName}» из взрываемых линий — они подсвечены рамкой и выпадают чаще`,
+  hintCollect: (target, colorName) =>
+    `Убери ${target} блоков «${colorName}» из взрываемых линий — они подсвечены рамкой и выпадают чаще`,
   colorNames: ["Коралл", "Янтарь", "Изумруд", "Роза", "Аметист", "Бирюза", "Апельсин", "Лайм"],
   mega: "МЕГА УДАР!",
   triple: "ТРОЙНАЯ!",
@@ -224,6 +222,7 @@ const en: Strings = {
   score: "Score",
   streakChip: (mult) => `Streak ×${mult}`,
   goalAria: (label, now, target) => `Level goal: ${label} ${now} of ${target}`,
+  goalsAria: "Level goals",
   livesAria: (n) => `Lives: ${n} of 3`,
   exitAria: "Back to the level map",
   boardAria: "Game board: drag pieces from the tray onto the grid",
@@ -234,6 +233,15 @@ const en: Strings = {
   nextLevel: "Next level",
   toMap: "Map",
   retryImprove: "Retry",
+  levelFailed: (n) => `Level ${n} failed`,
+  loseMoves: "Out of moves!",
+  loseBombs: "Boom! The bombs won",
+  loseStall: "No room left for the pieces",
+  goalLine: (label, now, target) => `Goal: ${label} ${now}/${target}`,
+  retry: "Retry",
+  hammerAria: (n) => `Hammer: smash one block, ${n} left`,
+  shuffleAria: (n) => `Shuffle the tray pieces, ${n} left`,
+  plus5Aria: (n) => `Five extra moves, ${n} left`,
   shop: "Shop",
   shopAria: "Shop: buy boosters with coins without leaving the level",
   shopCoinsAria: (n) => `Coins: ${n}`,
@@ -253,16 +261,6 @@ const en: Strings = {
   adCloseAria: "Close the ad without a reward",
   adLoading: "Loading ad…",
   adUnavailable: "Ad unavailable — try again later",
-  levelFailed: (n) => `Level ${n} failed`,
-  loseMoves: "Out of moves!",
-  loseBombs: "Boom! The bombs won",
-  loseStall: "No room left for the pieces",
-  goalLine: (label, now, target) => `Goal: ${label} ${now}/${target}`,
-  retry: "Retry",
-  hammerAria: (n) => `Hammer: smash one block, ${n} left`,
-  shuffleAria: (n) => `Shuffle the tray pieces, ${n} left`,
-  plus5Aria: (n) => `Five extra moves, ${n} left`,
-  goalsAria: "Level goals",
   goalLines: "Lines",
   goalScore: "Score",
   goalDefuse: "Defuse",
@@ -270,7 +268,8 @@ const en: Strings = {
   hintLines: (target, moves) => `Blast ${target} lines in ${moves} moves`,
   hintScore: (target, moves) => `Score ${target} points in ${moves} moves`,
   hintDefuse: (target) => `Defuse ${target} bombs: clear them with full lines`,
-  hintCollect: (target, colorName) => `Clear ${target} "${colorName}" blocks from blasted lines — they glow with a border and drop more often`,
+  hintCollect: (target, colorName) =>
+    `Clear ${target} "${colorName}" blocks from blasted lines — they glow with a border and drop more often`,
   colorNames: ["Coral", "Amber", "Emerald", "Rose", "Amethyst", "Turquoise", "Orange", "Lime"],
   mega: "MEGA BLAST!",
   triple: "TRIPLE!",

@@ -1,45 +1,132 @@
 "use client";
 
+// ── Реклама: демо-оверлей для веба + мост к нативному Yandex Mobile Ads SDK ──
+
 import { useEffect, useState } from "react";
-import { Bomb, X } from "lucide-react";
+import { Bomb, Video, X } from "lucide-react";
 import { tr, type Lang } from "./i18n";
 
-/** длительность демо-«рекламы», секунд */
-export const AD_SECONDS = 5;
+export interface YandexAdsPlugin {
+  addListener(eventName: string, cb: (data: { type?: string }) => void): Promise<{ remove(): Promise<void> }>;
+  loadRewarded(opts: { blockId: string }): Promise<void>;
+  showRewarded(): Promise<void>;
+}
 
-interface Props {
+interface CapacitorLike {
+  isNativePlatform?: () => boolean;
+  Plugins?: { YandexAds?: YandexAdsPlugin };
+}
+
+declare global {
+  interface Window {
+    Capacitor?: CapacitorLike;
+  }
+}
+
+/** Нативный Yandex Ads доступен? (в вебе — false, играем демо-ролик) */
+export function isNativeYandexAds(): boolean {
+  const cap = window.Capacitor;
+  return (
+    !!cap &&
+    typeof cap.isNativePlatform === "function" &&
+    cap.isNativePlatform() &&
+    !!cap.Plugins?.YandexAds &&
+    typeof cap.Plugins.YandexAds.addListener === "function"
+  );
+}
+
+export type RewardedResult = "rewarded" | "closed" | "failed" | "unavailable";
+
+/** Показать Rewarded-ролик через Capacitor-мост YandexAds.
+ *  Резолвится "rewarded" только если игрок досмотрел до награды. */
+export async function showRewardedAd(blockId = "demo-rewarded-yandex"): Promise<RewardedResult> {
+  const cap = window.Capacitor;
+  const yandex = cap?.Plugins?.YandexAds;
+  if (!cap || !yandex || !cap.isNativePlatform?.()) return "unavailable";
+
+  const events: string[] = [];
+  const waiters: { types: string[]; resolve: (v: string) => void; timer: number }[] = [];
+  const waitFor = (types: string[], timeout: number): Promise<string> =>
+    new Promise((resolve) => {
+      const hit = types.find((t) => events.includes(t));
+      if (hit) {
+        resolve(hit);
+        return;
+      }
+      const waiter = {
+        types,
+        resolve,
+        timer: 0,
+      };
+      waiter.timer = window.setTimeout(() => {
+        const i = waiters.indexOf(waiter);
+        if (i >= 0) waiters.splice(i, 1);
+        resolve("__timeout__");
+      }, timeout);
+      waiters.push(waiter);
+    });
+
+  let listener: { remove(): Promise<void> } | null = null;
+  try {
+    listener = await yandex.addListener("rewardedAdEvent", (data) => {
+      const type = String(data?.type ?? "");
+      events.push(type);
+      for (const w of [...waiters]) {
+        if (w.types.includes(type)) {
+          window.clearTimeout(w.timer);
+          waiters.splice(waiters.indexOf(w), 1);
+          w.resolve(type);
+        }
+      }
+    });
+    await yandex.loadRewarded({ blockId });
+    const loaded = await waitFor(["loaded", "failedToLoad"], 25_000);
+    if (loaded !== "loaded") return "failed";
+    await yandex.showRewarded();
+    const dismissed = await waitFor(["dismissed", "failedToShow"], 240_000);
+    if (dismissed !== "dismissed") return "failed";
+    return events.includes("rewarded") ? "rewarded" : "closed";
+  } catch {
+    return "failed";
+  } finally {
+    try {
+      await listener?.remove();
+    } catch {
+      // слушатель уже снят
+    }
+  }
+}
+
+/** Длительность демо-ролика, мс */
+const DEMO_MS = 5000;
+
+interface AdOverlayProps {
   lang: Lang;
-  /** сколько монет даёт реклама */
   reward: number;
-  /** пользователь досмотрел ролик и нажал «Забрать» */
   onClaim: () => void;
-  /** закрыл крестиком до конца — без награды */
   onAbort: () => void;
 }
 
-/**
- * Полноэкранная «реклама» за монеты (демо-заглушка: сюда позже встанет реальный ролик).
- * Одна общая кнопка пополнения и в меню, и в магазине во время игры используют этот оверлей.
- * Отсчёт и блокировка кнопки награды живут внутри — родителю нужно только открыть/закрыть.
- */
-export default function AdOverlay({ lang, reward, onClaim, onAbort }: Props) {
+/** Демо-оверлей «рекламы» для веба: 5 секунд — и кнопка награды */
+export default function AdOverlay({ lang, reward, onClaim, onAbort }: AdOverlayProps) {
   const t = tr(lang);
-  const [left, setLeft] = useState(AD_SECONDS * 1000);
-  const [done, setDone] = useState(false);
+  const [msLeft, setMsLeft] = useState(DEMO_MS);
+  const [ready, setReady] = useState(false);
 
-  // отсчёт рекламы: 5 секунд, потом кнопка награды
   useEffect(() => {
-    const started = performance.now();
+    const start = performance.now();
     const id = window.setInterval(() => {
-      const rest = Math.max(0, AD_SECONDS * 1000 - (performance.now() - started));
-      setLeft(rest);
-      if (rest <= 0) {
+      const left = Math.max(0, DEMO_MS - (performance.now() - start));
+      setMsLeft(left);
+      if (left <= 0) {
         window.clearInterval(id);
-        setDone(true);
+        setReady(true);
       }
     }, 100);
     return () => window.clearInterval(id);
   }, []);
+
+  const seconds = Math.ceil(msLeft / 1000);
 
   return (
     <div
@@ -60,30 +147,31 @@ export default function AdOverlay({ lang, reward, onClaim, onAbort }: Props) {
         <div className="text-[10px] font-black uppercase tracking-[0.3em] text-white/35">{t.adTitle}</div>
         <div className="mt-3 grid h-36 place-items-center rounded-xl bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 animate-pulse">
           <div className="flex flex-col items-center gap-1.5 text-white">
-            <Bomb className="size-10" aria-hidden="true" />
+            <Video className="size-10" aria-hidden="true" />
             <div className="text-lg font-black tracking-wide">{t.appName}</div>
+            <Bomb className="size-5 text-white/80" aria-hidden="true" />
           </div>
         </div>
-        <div className="mt-3 text-[11px] leading-snug text-white/40">{t.adNote}</div>
-        <div className="mt-4" aria-hidden="true">
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+        <div className="mt-3 text-xs leading-relaxed text-white/40">{t.adNote}</div>
+        <div className="mt-4 flex items-center justify-center gap-2">
+          {ready ? (
+            <button
+              type="button"
+              onClick={onClaim}
+              className="w-full rounded-xl bg-gradient-to-b from-amber-400 to-orange-500 py-3 text-sm font-black text-[#221a08] shadow-lg shadow-orange-950/50 transition active:scale-95"
+            >
+              {t.adClaim(reward)}
+            </button>
+          ) : (
             <div
-              className="h-full rounded-full bg-amber-400"
-              style={{ width: `${(1 - left / (AD_SECONDS * 1000)) * 100}%` }}
-            />
-          </div>
-          <div className="mt-1.5 text-xs font-bold tabular-nums text-white/50">
-            {t.adSeconds(Math.ceil(left / 1000))}
-          </div>
+              className="w-full rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-black text-white/50 tabular-nums"
+              role="status"
+              aria-live="polite"
+            >
+              {t.adSeconds(seconds)}
+            </div>
+          )}
         </div>
-        <button
-          type="button"
-          onClick={onClaim}
-          disabled={!done}
-          className="mt-4 w-full rounded-xl bg-gradient-to-b from-amber-400 to-orange-500 py-3 text-sm font-black text-[#221a08] shadow-lg shadow-orange-950/50 transition active:scale-95 disabled:opacity-40"
-        >
-          {t.adClaim(reward)}
-        </button>
       </div>
     </div>
   );

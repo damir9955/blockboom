@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ElementType } from "react";
 import { Bomb, Coins, Hammer, Languages, Lock, Play, Plus, Shuffle, Star, Video, Volume2, VolumeX } from "lucide-react";
 import { tr, type Lang } from "./i18n";
-import { LEVELS, LEVEL_COUNT, goalHint } from "./levels";
+import { LEVELS, LEVEL_COUNT, levelHint } from "./levels";
 import { PRICES, totalStars, type BoosterKind, type Progress } from "./progress";
-import { nativeAdsAvailable, showRewardedAd } from "./ads";
-import AdOverlay from "./AdOverlay";
+import AdOverlay, { isNativeYandexAds, showRewardedAd } from "./AdOverlay";
 import BuyConfirm from "./BuyConfirm";
 
 interface Props {
@@ -14,11 +13,9 @@ interface Props {
   lang: Lang;
   onToggleLang: () => void;
   onStart: (n: number) => void;
-  onBuy: (kind: BoosterKind) => void;
+  onBuy: (kind: BoosterKind) => boolean;
   onToggleMute: () => void;
-  /** награда за просмотр рекламы; возвращает новый баланс монет */
-  onAdReward: (reward: number) => number;
-  /** сколько монет даёт реклама */
+  onAdReward: (n: number) => void;
   adReward: number;
 }
 
@@ -39,34 +36,12 @@ export default function MapScreen({ progress, lang, onToggleLang, onStart, onBuy
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const currentRef = useRef<HTMLButtonElement | null>(null);
   const [lockedShake, setLockedShake] = useState(0);
-  // ── Пополнение через рекламу: одна общая кнопка в главном меню ──
+  const [pendingKind, setPendingKind] = useState<BoosterKind | null>(null);
   const [adOpen, setAdOpen] = useState(false);
-  // ── нативная реклама (Android): ролик Яндекса вместо демо-оверлея ──
-  const [adBusy, setAdBusy] = useState(false);
-  const [adError, setAdError] = useState(false);
-  const adErrorTimer = useRef(0);
-
-  // пополнение: в приложении — ролик Яндекса, на сайте — демо-оверлей
-  const topUp = () => {
-    if (adOpen || adBusy) return;
-    if (nativeAdsAvailable()) {
-      setAdBusy(true);
-      void showRewardedAd().then((res) => {
-        setAdBusy(false);
-        if (res === "rewarded") {
-          onAdReward(adReward);
-        } else if (res === "failed") {
-          setAdError(true);
-          window.clearTimeout(adErrorTimer.current);
-          adErrorTimer.current = window.setTimeout(() => setAdError(false), 3500);
-        }
-      });
-    } else {
-      setAdOpen(true);
-    }
-  };
-  // ── Подтверждение покупки: выбранный предмет ждёт «Купить»/«Отмена» ──
-  const [pendingBuy, setPendingBuy] = useState<BoosterKind | null>(null);
+  const [adLoading, setAdLoading] = useState(false);
+  const [adFailed, setAdFailed] = useState(false);
+  const adOpenRef = useRef(false);
+  const failTimerRef = useRef(0);
 
   // автоскролл к текущему уровню
   useEffect(() => {
@@ -94,14 +69,49 @@ export default function MapScreen({ progress, lang, onToggleLang, onStart, onBuy
   const points = LEVELS.map((l) => nodePos(l.n));
   const pathD = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
 
-  const boosters: { kind: BoosterKind; label: string; icon: typeof Hammer; price: number; count: number; tone: string }[] = [
-    { kind: "hammer", label: t.hammer, icon: Hammer, price: PRICES.hammer, count: progress.boosters.hammer, tone: "bg-rose-500" },
-    { kind: "shuffle", label: t.shuffle, icon: Shuffle, price: PRICES.shuffle, count: progress.boosters.shuffle, tone: "bg-teal-500" },
-    { kind: "plus5", label: `+${t.plus5}`, icon: Plus, price: PRICES.plus5, count: progress.boosters.plus5, tone: "bg-amber-500" },
+  const boosters: { kind: BoosterKind; label: string; Icon: ElementType; price: number; count: number; tone: string }[] = [
+    { kind: "hammer", label: t.hammer, Icon: Hammer, price: PRICES.hammer, count: progress.boosters.hammer, tone: "bg-rose-500" },
+    { kind: "shuffle", label: t.shuffle, Icon: Shuffle, price: PRICES.shuffle, count: progress.boosters.shuffle, tone: "bg-teal-500" },
+    { kind: "plus5", label: `+${t.plus5}`, Icon: Plus, price: PRICES.plus5, count: progress.boosters.plus5, tone: "bg-amber-500" },
   ];
+  const pendingItem = boosters.find((b) => b.kind === pendingKind) ?? null;
+  const PendingIcon = pendingItem?.Icon;
 
-  // предмет, ждущий подтверждения покупки (для диалога BuyConfirm)
-  const pendingItem = boosters.find((b) => b.kind === pendingBuy) ?? null;
+  const closeAd = useCallback(() => {
+    adOpenRef.current = false;
+    setAdOpen(false);
+    setAdLoading(false);
+  }, []);
+
+  const claimAd = useCallback(() => {
+    onAdReward(adReward);
+    closeAd();
+  }, [adReward, closeAd, onAdReward]);
+
+  // «Пополнить +N» — нативная реклама или демо-ролик
+  const handleTopUp = useCallback(() => {
+    if (adOpenRef.current) return;
+    if (isNativeYandexAds()) {
+      adOpenRef.current = true;
+      setAdOpen(true);
+      setAdLoading(true);
+      void showRewardedAd().then((res) => {
+        if (res === "rewarded") {
+          claimAd();
+        } else {
+          closeAd();
+          if (res === "failed") {
+            setAdFailed(true);
+            window.clearTimeout(failTimerRef.current);
+            failTimerRef.current = window.setTimeout(() => setAdFailed(false), 3500);
+          }
+        }
+      });
+    } else {
+      adOpenRef.current = true;
+      setAdOpen(true);
+    }
+  }, [claimAd, closeAd]);
 
   return (
     <div className="flex h-[100dvh] w-full flex-col items-center overflow-hidden bg-[#131118] bg-gradient-to-b from-[#1d1828] via-[#141219] to-[#0f0e14] text-white select-none">
@@ -122,8 +132,7 @@ export default function MapScreen({ progress, lang, onToggleLang, onStart, onBuy
           </div>
           <div className="flex items-center gap-2">
             <div
-              key={progress.coins}
-              className="score-pop flex items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-sm font-black text-amber-300 tabular-nums"
+              className="flex items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-sm font-black text-amber-300 tabular-nums"
               aria-label={t.coinsAria(progress.coins)}
             >
               <Coins className="size-4" aria-hidden="true" />
@@ -190,7 +199,7 @@ export default function MapScreen({ progress, lang, onToggleLang, onStart, onBuy
                   aria-label={
                     locked
                       ? t.levelLockedAria(l.n)
-                      : `${done ? t.levelDoneAria(l.n, st ?? 0) : t.levelNChip(l.n)}. ${goalHint(l, lang)}`
+                      : `${done ? t.levelDoneAria(l.n, st ?? 0) : t.levelNChip(l.n)}. ${levelHint(l, lang)}`
                   }
                   className="absolute -translate-x-1/2 -translate-y-1/2 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
                   style={{ left: `${p.x}%`, top: p.y }}
@@ -234,17 +243,16 @@ export default function MapScreen({ progress, lang, onToggleLang, onStart, onBuy
           </div>
         </div>
 
-        {/* Магазин бустеров: одна общая кнопка пополнения + покупка через подтверждение */}
+        {/* Магазин бустеров + пополнение */}
         <section className="mt-3" aria-label={t.boosterShopAria}>
-          {/* пополнение через рекламу — общая кнопка, не привязана к предмету */}
-          {adError && (
+          {adFailed && (
             <div className="mb-1 text-center text-[11px] font-bold text-rose-300/90" role="status">
               {t.adUnavailable}
             </div>
           )}
           <button
             type="button"
-            onClick={topUp}
+            onClick={handleTopUp}
             aria-label={t.topUpAria(adReward)}
             className="flex w-full items-center justify-center gap-2 rounded-xl border border-teal-400/40 bg-gradient-to-b from-teal-500/20 to-teal-500/10 py-2.5 text-sm font-black text-teal-300 transition active:scale-95 hover:bg-teal-500/25"
           >
@@ -253,13 +261,13 @@ export default function MapScreen({ progress, lang, onToggleLang, onStart, onBuy
             <span className="text-[11px] font-bold text-teal-300/60">{t.topUpNote}</span>
           </button>
           <div className="mt-2 grid grid-cols-3 gap-2">
-            {boosters.map(({ kind, label, icon: Icon, price, count, tone }) => {
+            {boosters.map(({ kind, label, Icon, price, count, tone }) => {
               const afford = progress.coins >= price;
               return (
                 <button
                   key={kind}
                   type="button"
-                  onClick={() => afford && setPendingBuy(kind)}
+                  onClick={() => afford && setPendingKind(kind)}
                   disabled={!afford}
                   aria-label={t.buyAria(label, price, count)}
                   className="flex flex-col items-center gap-1 rounded-xl border border-white/10 bg-white/5 px-2 py-2.5 transition active:scale-95 hover:bg-white/10 disabled:opacity-40"
@@ -284,38 +292,30 @@ export default function MapScreen({ progress, lang, onToggleLang, onStart, onBuy
         </section>
       </main>
 
-      {/* ── Подтверждение покупки (единый диалог с магазином в игре) ── */}
-      {pendingItem && (
+      {/* Подтверждение покупки */}
+      {pendingItem && PendingIcon && (
         <BuyConfirm
           lang={lang}
           name={pendingItem.label}
           price={pendingItem.price}
           count={pendingItem.count}
           tone={pendingItem.tone}
-          icon={<pendingItem.icon className="size-6 text-white" aria-hidden="true" />}
+          icon={<PendingIcon className="size-6 text-white" aria-hidden="true" />}
           onConfirm={() => {
             onBuy(pendingItem.kind);
-            setPendingBuy(null);
+            setPendingKind(null);
           }}
-          onCancel={() => setPendingBuy(null)}
+          onCancel={() => setPendingKind(null)}
         />
       )}
 
-      {/* ── Пополнение через рекламу (тот же оверлей, что и в игре) ── */}
-      {adOpen && (
-        <AdOverlay
-          lang={lang}
-          reward={adReward}
-          onClaim={() => {
-            onAdReward(adReward);
-            setAdOpen(false);
-          }}
-          onAbort={() => setAdOpen(false)}
-        />
+      {/* Реклама: демо-ролик (веб) */}
+      {adOpen && !adLoading && (
+        <AdOverlay lang={lang} reward={adReward} onClaim={claimAd} onAbort={closeAd} />
       )}
 
-      {/* ── нативный ролик Яндекса: пока грузится/идёт — заглушка ── */}
-      {adBusy && (
+      {/* Реклама: загрузка нативного ролика */}
+      {adOpen && adLoading && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
           role="status"

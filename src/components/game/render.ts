@@ -1,8 +1,17 @@
-// ── Отрисовка на canvas: поле, блоки, частицы, тексты ──────────────────────
+// ── Отрисовка на canvas: поле, блоки, бомбы с круговым фитилём, камни, частицы ─
 
-import { BLOCK_COLORS, GRID_SIZE, IDLE_BOMB_TICK, isStone, stoneDamage, type Grid, type Piece } from "./engine";
+import { BLOCK_COLORS, GRID_SIZE, isStone, stoneStage, type Grid, type Piece } from "./engine";
 
 export const TRAY_SCALE = 0.55;
+
+/** Фитиль тикает по времени: раз в столько секунд простоя.
+ *  Это же — длительность одного круга анимации фитиля. */
+export const IDLE_BOMB_TICK = 7;
+
+/** Доля сгоревшего фитиля (0..1) — искра идёт по кругу за это время */
+export function fuseFraction(g: GameState): number {
+  return Math.max(0, Math.min(1, g.fuseAcc / IDLE_BOMB_TICK));
+}
 
 export interface LayoutMetrics {
   W: number;
@@ -101,12 +110,12 @@ export interface GameState {
   placements: number;
   /** ход, на котором появится следующая полевая бомба */
   nextBombAt: number;
-  /** секунды без ходов — фитиль тикает и по времени */
-  idleAcc: number;
+  /** сколько секунд горит текущий круг фитиля — НЕ останавливается во время драга */
+  fuseAcc: number;
   /** сколько блоков цвета цели убрано (для цели «собери») */
   collected: number;
-  /** цвет цели collect-уровня — такие блоки подсвечиваются */
-  goalColor?: number;
+  /** цвет цели «собери» — такие блоки подсвечены и выпадают чаще */
+  goalColor: number | undefined;
   /** молоток взведён — следующий тап по блоку сносит его */
   armed: boolean;
   /** клетка под прицелом молотка */
@@ -133,7 +142,8 @@ export function roundRect(
   ctx.closePath();
 }
 
-/** Один «конфетный» блок с градиентом и блеском; highlight — блок цвета цели */
+/** Один «конфетный» блок с градиентом и блеском.
+ *  highlight — пульсирующая белая рамка для блоков цвета цели «собери». */
 export function drawBlock(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -164,10 +174,10 @@ export function drawBlock(
   ctx.lineWidth = Math.max(1, s * 0.035);
   roundRect(ctx, x + pad, y + pad, w, w, r);
   ctx.stroke();
-  // подсветка цвета цели: пульсирующая белая рамка
+  // рамка цвета цели
   if (highlight) {
-    const pulse = 0.55 + 0.45 * Math.sin(performance.now() / 300);
-    ctx.strokeStyle = `rgba(255,255,255,${(0.95 * alpha * (0.6 + 0.4 * pulse)).toFixed(3)})`;
+    const wave = 0.55 + 0.45 * Math.sin(performance.now() / 300);
+    ctx.strokeStyle = `rgba(255,255,255,${(alpha * (0.6 + 0.4 * wave)).toFixed(3)})`;
     ctx.lineWidth = Math.max(1.5, s * 0.07);
     roundRect(ctx, x + pad, y + pad, w, w, r);
     ctx.stroke();
@@ -175,16 +185,132 @@ export function drawBlock(
   ctx.restore();
 }
 
-/** Прогресс «сгорающего кольца» бомбы: 0 — кольцо полное, 1 — тик вот-вот */
-export function idleRing(g: GameState): number {
-  return Math.max(0, Math.min(1, g.idleAcc / IDLE_BOMB_TICK));
+/** Камень: стадия 0 — идеальный гладкий; стадия 1 — весь в трещинах (до разрушения) */
+export function drawStone(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  s: number,
+  alpha = 1,
+  stage = 0,
+): void {
+  const pad = s * 0.05;
+  const r = s * 0.18;
+  const inner = s - pad * 2;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  const grad = ctx.createLinearGradient(0, y, 0, y + s);
+  if (stage >= 1) {
+    // потемневший, «раскрошившийся» камень
+    grad.addColorStop(0, "#787f8e");
+    grad.addColorStop(0.5, "#565d68");
+    grad.addColorStop(1, "#3a414c");
+  } else {
+    grad.addColorStop(0, "#8d93a3");
+    grad.addColorStop(0.5, "#6b7280");
+    grad.addColorStop(1, "#4b5563");
+  }
+  ctx.fillStyle = grad;
+  roundRect(ctx, x + pad, y + pad, inner, inner, r);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(0,0,0,0.4)";
+  ctx.lineWidth = Math.max(1, s * 0.05);
+  roundRect(ctx, x + pad, y + pad, inner, inner, r);
+  ctx.stroke();
+  // гладкий блик сверху (у целого — ярче)
+  ctx.fillStyle = `rgba(255,255,255,${stage >= 1 ? 0.07 : 0.16})`;
+  roundRect(ctx, x + pad + inner * 0.08, y + pad + inner * 0.07, inner * 0.84, inner * 0.24, r * 0.55);
+  ctx.fill();
+
+  if (stage >= 1) {
+    // ── сеть трещин по всему камню ──
+    ctx.strokeStyle = "rgba(10,9,14,0.8)";
+    ctx.lineWidth = Math.max(1.5, s * 0.05);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    const cracks: [number, number][][] = [
+      // сквозные трещины через весь камень
+      [[0.16, 0.1], [0.38, 0.34], [0.3, 0.62], [0.52, 0.9]],
+      [[0.86, 0.22], [0.62, 0.48], [0.78, 0.72]],
+      [[0.1, 0.7], [0.34, 0.52], [0.28, 0.28]],
+      [[0.7, 0.06], [0.58, 0.3], [0.74, 0.46]],
+      [[0.3, 0.94], [0.46, 0.72], [0.66, 0.88]],
+      [[0.06, 0.4], [0.26, 0.46], [0.2, 0.64]],
+      // лучи от точки удара в центре
+      [[0.52, 0.48], [0.44, 0.18]],
+      [[0.52, 0.48], [0.66, 0.36]],
+      [[0.52, 0.48], [0.4, 0.7]],
+      [[0.52, 0.48], [0.7, 0.6]],
+      [[0.52, 0.48], [0.6, 0.82]],
+      [[0.52, 0.48], [0.34, 0.44]],
+      // короткие ответвления
+      [[0.38, 0.34], [0.52, 0.2]],
+      [[0.62, 0.48], [0.56, 0.62]],
+      [[0.34, 0.52], [0.48, 0.44]],
+      [[0.46, 0.72], [0.34, 0.8]],
+      [[0.58, 0.3], [0.66, 0.2]],
+    ];
+    ctx.beginPath();
+    for (const line of cracks) {
+      ctx.moveTo(x + line[0][0] * s, y + line[0][1] * s);
+      for (let i = 1; i < line.length; i++) {
+        ctx.lineTo(x + line[i][0] * s, y + line[i][1] * s);
+      }
+    }
+    ctx.stroke();
+    // тонкая паутинка вторичных трещин
+    ctx.strokeStyle = "rgba(10,9,14,0.55)";
+    ctx.lineWidth = Math.max(1, s * 0.032);
+    const hair: [number, number][][] = [
+      [[0.44, 0.18], [0.36, 0.1]],
+      [[0.66, 0.36], [0.78, 0.34]],
+      [[0.4, 0.7], [0.32, 0.62]],
+      [[0.7, 0.6], [0.82, 0.54]],
+      [[0.6, 0.82], [0.66, 0.9]],
+      [[0.26, 0.46], [0.18, 0.4]],
+      [[0.78, 0.72], [0.84, 0.8]],
+    ];
+    ctx.beginPath();
+    for (const line of hair) {
+      ctx.moveTo(x + line[0][0] * s, y + line[0][1] * s);
+      ctx.lineTo(x + line[1][0] * s, y + line[1][1] * s);
+    }
+    ctx.stroke();
+    // сколотые уголки
+    ctx.fillStyle = "rgba(20,19,26,0.55)";
+    const chip = (pts: [number, number][]): void => {
+      ctx.beginPath();
+      ctx.moveTo(x + pts[0][0] * s, y + pts[0][1] * s);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(x + pts[i][0] * s, y + pts[i][1] * s);
+      ctx.closePath();
+      ctx.fill();
+    };
+    chip([[pad, pad + 0.16 * s], [pad + 0.16 * s, pad], [pad + 0.3 * s, pad + 0.05 * s], [pad + 0.08 * s, pad + 0.26 * s]]);
+    chip([
+      [pad + inner - 0.02 * s, pad + inner - 0.16 * s],
+      [pad + inner - 0.18 * s, pad + inner],
+      [pad + inner - 0.34 * s, pad + inner - 0.04 * s],
+    ]);
+    chip([[pad + 0.06 * s, pad + inner - 0.02 * s], [pad + 0.2 * s, pad + inner - 0.06 * s], [pad + 0.1 * s, pad + inner - 0.2 * s]]);
+    // крошки-точки
+    ctx.fillStyle = "rgba(15,14,20,0.5)";
+    for (const [dx, dy, dr] of [
+      [0.24, 0.24, 0.025],
+      [0.76, 0.3, 0.02],
+      [0.64, 0.66, 0.025],
+      [0.3, 0.8, 0.02],
+      [0.5, 0.58, 0.018],
+    ] as [number, number, number][]) {
+      ctx.beginPath();
+      ctx.arc(x + dx * s, y + dy * s, dr * s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
 }
 
-/** Бомба: пульсирующий тёмный ШАР с капсюлем, видимым ФИТИЛЁМ, искрой и таймером.
- *  Пульсирует ВСЕГДА (спокойно ~0.9 Гц; при таймере ≤ 2 — быстро и с красным свечением),
- *  фаза phase рассинхронизирует бомбы на поле, чтобы не пульсировали хором.
- *  ring — прогресс «сгорающего кольца» (0..1): круг по периметру выгорает ПРОТИВ
- *  часовой стрелки за IDLE_BOMB_TICK секунд; цифра меняется — круг загорается заново. */
+/** Бомба: сфера с фитилём-искрой и цифрой.
+ *  ring (0..1) — доля сгоревшего фитиля: искра идёт по кругу вокруг бомбы. */
 export function drawBombBlock(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -197,88 +323,78 @@ export function drawBombBlock(
   ring?: number,
 ): void {
   const urgent = timer <= 2;
-  const pulse = urgent ? 1 + 0.09 * Math.sin(time * 13 + phase) : 1 + 0.045 * Math.sin(time * 4.5 + phase);
+  const pulse = urgent ? 1 + 0.09 * Math.sin(13 * time + phase) : 1 + 0.045 * Math.sin(4.5 * time + phase);
   ctx.save();
   ctx.globalAlpha = alpha;
-
-  // подложка-клетка (чтобы бомба не «плавала» в пустоте сетки)
+  // подложка
   ctx.fillStyle = urgent ? "#241318" : "#181420";
   roundRect(ctx, x + s * 0.05, y + s * 0.05, s * 0.9, s * 0.9, s * 0.18);
   ctx.fill();
-
-  // корпус: шар с бликом
-  const R = s * 0.34 * pulse;
+  // сфера бомбы
+  const br = s * 0.34 * pulse;
   const cx = x + s / 2;
   const cy = y + s * 0.62;
-  const grad = ctx.createRadialGradient(cx - R * 0.35, cy - R * 0.45, R * 0.1, cx, cy, R);
+  const grad = ctx.createRadialGradient(cx - br * 0.35, cy - br * 0.45, br * 0.1, cx, cy, br);
   grad.addColorStop(0, "#5a5266");
   grad.addColorStop(0.55, "#2c2436");
   grad.addColorStop(1, "#161122");
   ctx.fillStyle = grad;
   ctx.beginPath();
-  ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.arc(cx, cy, br, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = urgent ? "rgba(255,90,60,0.95)" : "rgba(255,255,255,0.16)";
   ctx.lineWidth = Math.max(1.2, s * 0.04);
   ctx.stroke();
-  // блик
+  // блик на сфере
   ctx.fillStyle = "rgba(255,255,255,0.22)";
   ctx.beginPath();
-  ctx.ellipse(cx - R * 0.38, cy - R * 0.48, R * 0.32, R * 0.2, -0.6, 0, Math.PI * 2);
+  ctx.ellipse(cx - br * 0.38, cy - br * 0.48, br * 0.32, br * 0.2, -0.6, 0, Math.PI * 2);
   ctx.fill();
-
-  // красное свечение при догорающем фитиле
+  // тревожное кольцо-пульс
   if (urgent) {
-    const glow = 0.35 + 0.3 * Math.sin(time * 13 + phase);
-    ctx.strokeStyle = `rgba(255,60,40,${glow.toFixed(3)})`;
+    const a = 0.35 + 0.3 * Math.sin(13 * time + phase);
+    ctx.strokeStyle = `rgba(255,60,40,${a.toFixed(3)})`;
     ctx.lineWidth = Math.max(1.5, s * 0.05);
     ctx.beginPath();
-    ctx.arc(cx, cy, R + s * 0.09, 0, Math.PI * 2);
+    ctx.arc(cx, cy, br + s * 0.09, 0, Math.PI * 2);
     ctx.stroke();
   }
-
-  // капсюль (горлышко) на верхушке шара
-  const capW = s * 0.2;
-  const capH = s * 0.09;
-  const capX = cx - capW / 2;
-  const capY = cy - R - capH * 0.8;
+  // фитильный stub + изогнутый фитиль
+  const stubW = s * 0.2;
+  const stubH = s * 0.09;
+  const stubX = cx - stubW / 2;
+  const stubY = cy - br - stubH * 0.8;
   ctx.fillStyle = "#6b6478";
-  roundRect(ctx, capX, capY, capW, capH, s * 0.03);
+  roundRect(ctx, stubX, stubY, stubW, stubH, s * 0.03);
   ctx.fill();
   ctx.strokeStyle = "rgba(0,0,0,0.4)";
   ctx.lineWidth = 1;
+  roundRect(ctx, stubX, stubY, stubW, stubH, s * 0.03);
   ctx.stroke();
-
-  // ФИТИЛЬ: изогнутый шнур от капсюля вверх-вбок
-  const fx0 = cx;
-  const fy0 = capY;
-  const fx1 = cx + s * 0.2;
-  const fy1 = y + s * 0.1;
+  const sparkX = cx + s * 0.2;
+  const sparkY = y + s * 0.1;
   ctx.strokeStyle = "#d9c9a3";
   ctx.lineWidth = Math.max(1.5, s * 0.05);
   ctx.lineCap = "round";
   ctx.beginPath();
-  ctx.moveTo(fx0, fy0);
-  ctx.quadraticCurveTo(cx + s * 0.04, y + s * 0.12, fx1, fy1);
+  ctx.moveTo(cx, stubY);
+  ctx.quadraticCurveTo(cx + s * 0.04, y + s * 0.12, sparkX, sparkY);
   ctx.stroke();
-
-  // ИСКРА на конце фитиля — мерцает всегда, при опасности красно-оранжевая
-  const flick = Math.abs(Math.sin(time * (urgent ? 16 : 9) + phase));
-  const sparkR = s * (0.055 + 0.045 * flick);
-  const sparkGrad = ctx.createRadialGradient(fx1, fy1, 0, fx1, fy1, sparkR * 2.2);
+  // искра на конце фитиля
+  const sparkR = s * (0.055 + 0.045 * Math.abs(Math.sin(time * (urgent ? 16 : 9) + phase)));
+  const sparkGrad = ctx.createRadialGradient(sparkX, sparkY, 0, sparkX, sparkY, 2.2 * sparkR);
   sparkGrad.addColorStop(0, "#ffffff");
   sparkGrad.addColorStop(0.4, urgent ? "#ff8a4d" : "#ffd34d");
   sparkGrad.addColorStop(1, "rgba(255,120,40,0)");
   ctx.fillStyle = sparkGrad;
   ctx.beginPath();
-  ctx.arc(fx1, fy1, sparkR * 2.2, 0, Math.PI * 2);
+  ctx.arc(sparkX, sparkY, 2.2 * sparkR, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = urgent ? "#ffb14d" : "#fff3b0";
   ctx.beginPath();
-  ctx.arc(fx1, fy1, sparkR * 0.55, 0, Math.PI * 2);
+  ctx.arc(sparkX, sparkY, sparkR * 0.55, 0, Math.PI * 2);
   ctx.fill();
-
-  // таймер — крупная цифра на шаре
+  // цифра таймера
   ctx.fillStyle = urgent ? "#ff6a4d" : "#f4f0ff";
   ctx.font = `900 ${Math.round(s * 0.4)}px system-ui, -apple-system, "Segoe UI", sans-serif`;
   ctx.textAlign = "center";
@@ -288,141 +404,38 @@ export function drawBombBlock(
   ctx.lineWidth = Math.max(2, s * 0.07);
   ctx.strokeText(String(Math.max(0, timer)), cx, cy);
   ctx.fillText(String(Math.max(0, timer)), cx, cy);
-
-  // СГОРАЮЩЕЕ КОЛЬЦО-ОТСЧЁТ: круг по периметру выгорает против часовой стрелки;
-  // «огонь» (яркая точка) идёт от 12 часов налево-вниз, за ним кольцо исчезает.
+  // круговой фитиль: искра едет по кольцу, дуга — сгоревшая часть
   if (ring !== undefined && ring > 0.001 && ring < 0.999) {
-    const ringR = s * 0.42;
+    const trackR = s * 0.42;
     const lw = Math.max(2, s * 0.07);
-    // дорожка-подложка
     ctx.strokeStyle = "rgba(255,255,255,0.10)";
     ctx.lineWidth = lw;
     ctx.beginPath();
-    ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+    ctx.arc(cx, cy, trackR, 0, Math.PI * 2);
     ctx.stroke();
-    // цвет: янтарь → красный по мере выгорания
-    const heat = Math.max(0, Math.min(1, (ring - 0.4) / 0.6));
-    const rr = Math.round(255);
-    const gg = Math.round(194 + (77 - 194) * heat);
-    const bb = Math.round(61 + (77 - 61) * heat);
-    ctx.strokeStyle = `rgba(${rr},${gg},${bb},0.95)`;
+    const p = Math.max(0, Math.min(1, (ring - 0.4) / 0.6));
+    const col = `rgba(255,${Math.round(194 - 117 * p)},${Math.round(61 + 16 * p)},0.95)`;
+    ctx.strokeStyle = col;
     ctx.lineCap = "round";
-    // видимая часть — от точки горения против часовой обратно к 12 часам
-    const burn = -Math.PI / 2 - Math.PI * 2 * ring;
+    const a0 = -Math.PI / 2 - 2 * Math.PI * ring;
     ctx.beginPath();
-    ctx.arc(cx, cy, ringR, burn, -Math.PI / 2, true);
+    ctx.arc(cx, cy, trackR, a0, -Math.PI / 2, true);
     ctx.stroke();
-    // «огонь» на точке горения — мерцающая искра
-    const fx = cx + ringR * Math.cos(burn);
-    const fy = cy + ringR * Math.sin(burn);
-    const flick = 0.7 + 0.3 * Math.abs(Math.sin(time * 11 + phase));
-    const fr = s * 0.07 * flick;
-    const fg = ctx.createRadialGradient(fx, fy, 0, fx, fy, fr * 2.4);
-    fg.addColorStop(0, "#ffffff");
-    fg.addColorStop(0.35, heat > 0.5 ? "#ff8a4d" : "#ffd34d");
-    fg.addColorStop(1, "rgba(255,120,40,0)");
-    ctx.fillStyle = fg;
+    // бегающая искра на конце дуги
+    const sx = cx + trackR * Math.cos(a0);
+    const sy = cy + trackR * Math.sin(a0);
+    const sp = s * 0.07 * (0.7 + 0.3 * Math.abs(Math.sin(11 * time + phase)));
+    const g2 = ctx.createRadialGradient(sx, sy, 0, sx, sy, 2.4 * sp);
+    g2.addColorStop(0, "#ffffff");
+    g2.addColorStop(0.35, p > 0.5 ? "#ff8a4d" : "#ffd34d");
+    g2.addColorStop(1, "rgba(255,120,40,0)");
+    ctx.fillStyle = g2;
     ctx.beginPath();
-    ctx.arc(fx, fy, fr * 2.4, 0, Math.PI * 2);
+    ctx.arc(sx, sy, 2.4 * sp, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = "#fff3b0";
     ctx.beginPath();
-    ctx.arc(fx, fy, fr * 0.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
-}
-
-/** Камень-препятствие: тёмный гранит с фаской. damage: 0 — целый, 1 — трещина,
- *  2 — сеть трещин (темнее, со сколами). Разрушение — 3-й удар линии,
- *  кратер бомбы и молоток сносят сразу. */
-export function drawStoneBlock(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  s: number,
-  alpha = 1,
-  damage = 0,
-): void {
-  const pad = s * 0.05;
-  const r = s * 0.18;
-  const w = s - pad * 2;
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  // база: чем сильнее damage, тем темнее и «мёртвее» камень
-  const grad = ctx.createLinearGradient(0, y, 0, y + s);
-  if (damage >= 2) {
-    grad.addColorStop(0, "#787f8e");
-    grad.addColorStop(0.5, "#565d68");
-    grad.addColorStop(1, "#3a414c");
-  } else if (damage === 1) {
-    grad.addColorStop(0, "#83899a");
-    grad.addColorStop(0.5, "#616877");
-    grad.addColorStop(1, "#424a56");
-  } else {
-    grad.addColorStop(0, "#8d93a3");
-    grad.addColorStop(0.5, "#6b7280");
-    grad.addColorStop(1, "#4b5563");
-  }
-  ctx.fillStyle = grad;
-  roundRect(ctx, x + pad, y + pad, w, w, r);
-  ctx.fill();
-  ctx.strokeStyle = "rgba(0,0,0,0.4)";
-  ctx.lineWidth = Math.max(1, s * 0.05);
-  ctx.stroke();
-  // верхняя фаска (у побитого камня — меньше, «осыпается»)
-  ctx.fillStyle = `rgba(255,255,255,${damage >= 2 ? 0.07 : damage === 1 ? 0.11 : 0.16})`;
-  roundRect(ctx, x + pad + w * 0.08, y + pad + w * 0.07, w * 0.84, w * 0.24, r * 0.55);
-  ctx.fill();
-  // трещины
-  ctx.strokeStyle = "rgba(15,14,20,0.62)";
-  ctx.lineWidth = Math.max(1, s * 0.035);
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(x + s * 0.3, y + s * 0.44);
-  ctx.lineTo(x + s * 0.46, y + s * 0.56);
-  ctx.lineTo(x + s * 0.4, y + s * 0.72);
-  ctx.moveTo(x + s * 0.63, y + s * 0.28);
-  ctx.lineTo(x + s * 0.58, y + s * 0.5);
-  ctx.stroke();
-  // damage >= 1: главная сквозная трещина через весь камень
-  if (damage >= 1) {
-    ctx.strokeStyle = "rgba(10,9,14,0.8)";
-    ctx.lineWidth = Math.max(1.5, s * 0.05);
-    ctx.beginPath();
-    ctx.moveTo(x + s * 0.2, y + s * 0.16);
-    ctx.lineTo(x + s * 0.38, y + s * 0.42);
-    ctx.lineTo(x + s * 0.3, y + s * 0.64);
-    ctx.lineTo(x + s * 0.52, y + s * 0.88);
-    ctx.stroke();
-  }
-  // damage >= 2: сеть трещин + сколотые углы
-  if (damage >= 2) {
-    ctx.strokeStyle = "rgba(10,9,14,0.7)";
-    ctx.lineWidth = Math.max(1, s * 0.04);
-    ctx.beginPath();
-    ctx.moveTo(x + s * 0.82, y + s * 0.24);
-    ctx.lineTo(x + s * 0.62, y + s * 0.48);
-    ctx.lineTo(x + s * 0.78, y + s * 0.7);
-    ctx.moveTo(x + s * 0.62, y + s * 0.48);
-    ctx.lineTo(x + s * 0.44, y + s * 0.34);
-    ctx.moveTo(x + s * 0.5, y + s * 0.8);
-    ctx.lineTo(x + s * 0.7, y + s * 0.9);
-    ctx.stroke();
-    // сколы на кромках
-    ctx.fillStyle = "rgba(20,19,26,0.55)";
-    ctx.beginPath();
-    ctx.moveTo(x + pad, y + pad + s * 0.16);
-    ctx.lineTo(x + pad + s * 0.16, y + pad);
-    ctx.lineTo(x + pad + s * 0.3, y + pad + s * 0.05);
-    ctx.lineTo(x + pad + s * 0.08, y + pad + s * 0.26);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(x + pad + w - s * 0.02, y + pad + w - s * 0.16);
-    ctx.lineTo(x + pad + w - s * 0.18, y + pad + w);
-    ctx.lineTo(x + pad + w - s * 0.34, y + pad + w - s * 0.04);
-    ctx.closePath();
+    ctx.arc(sx, sy, sp * 0.5, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
@@ -449,14 +462,14 @@ export function drawPieceAt(
     const x = x0 + dc * cell * scale;
     const y = y0 + dr * cell * scale;
     if (piece.bomb === i && piece.bombTimer !== null) {
-      drawBombBlock(ctx, x, y, cell * scale, piece.bombTimer, time, alpha, i * 1.3, ring);
+      drawBombBlock(ctx, x, y, cell * scale, piece.bombTimer, time, alpha, 1.3 * i, ring);
     } else {
       drawBlock(ctx, x, y, cell * scale, piece.color, alpha, goalColor === piece.color);
     }
   });
 }
 
-/** Поле с подложкой, пустыми клетками и «поп»-анимацией новых блоков */
+/** Поле с подложкой, пустыми клетками, бомбами и камнями */
 export function drawBoard(ctx: CanvasRenderingContext2D, g: GameState, L: LayoutMetrics): void {
   const bs = L.cell * GRID_SIZE;
   ctx.save();
@@ -469,6 +482,7 @@ export function drawBoard(ctx: CanvasRenderingContext2D, g: GameState, L: Layout
 
   const popMap = new Map<number, number>();
   for (const p of g.pops) popMap.set(p.r * 100 + p.c, p.t);
+  const ring = fuseFraction(g);
 
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
@@ -485,11 +499,11 @@ export function drawBoard(ctx: CanvasRenderingContext2D, g: GameState, L: Layout
         if (t !== undefined && t < 0.24) {
           sc = 1 + 0.22 * Math.sin((t / 0.24) * Math.PI);
         }
-        const off = (1 - sc) * L.cell / 2;
+        const off = ((1 - sc) * L.cell) / 2;
         if (v < 0) {
-          drawBombBlock(ctx, x + off, y + off, L.cell * sc, -v, g.time, 1, r * 0.9 + c * 1.7, idleRing(g));
+          drawBombBlock(ctx, x + off, y + off, L.cell * sc, -v, g.time, 1, 0.9 * r + 1.7 * c, ring);
         } else if (isStone(v)) {
-          drawStoneBlock(ctx, x, y, L.cell, 1, stoneDamage(v));
+          drawStone(ctx, x + off, y + off, L.cell * sc, 1, stoneStage(v));
         } else {
           drawBlock(ctx, x + off, y + off, L.cell * sc, v, 1, g.goalColor === v);
         }
@@ -558,6 +572,7 @@ export function drawTray(ctx: CanvasRenderingContext2D, g: GameState, L: LayoutM
   roundRect(ctx, 0, L.trayY - 12, L.W, L.trayH + 14, 16);
   ctx.fillStyle = "#15131d";
   ctx.fill();
+  const ring = fuseFraction(g);
   for (let i = 0; i < 3; i++) {
     const piece = g.pieces[i];
     if (!piece) continue;
@@ -565,7 +580,7 @@ export function drawTray(ctx: CanvasRenderingContext2D, g: GameState, L: LayoutM
     if (g.anim && g.anim.slot === i) continue;
     const cx = slotW * (i + 0.5);
     const cy = L.trayY + L.trayH / 2;
-    drawPieceAt(ctx, piece, cx, cy, L.cell, TRAY_SCALE, g.dead[i] ? 0.3 : 1, g.time, g.goalColor, idleRing(g));
+    drawPieceAt(ctx, piece, cx, cy, L.cell, TRAY_SCALE, g.dead[i] ? 0.3 : 1, g.time, g.goalColor, ring);
   }
   ctx.restore();
 }
@@ -573,7 +588,7 @@ export function drawTray(ctx: CanvasRenderingContext2D, g: GameState, L: LayoutM
 /** Палитра огня для взрывов бомб */
 export const FIRE_COLORS = ["#ff7a3d", "#ffc23d", "#ff4d4d", "#ffffff"];
 
-/** Палитра каменной крошки: удары линии трещат камнем, разрушение — осколки */
+/** Палитра осколков камня */
 export const STONE_COLORS = ["#c3c9d4", "#9aa2b0", "#6b7280", "#3a414c"];
 
 /** Взрыв частиц в точке (x, y) */

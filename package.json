@@ -1,6 +1,6 @@
 {
   "name": "blockboom",
-  "version": "1.3.3",
+  "version": "1.4.2",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",

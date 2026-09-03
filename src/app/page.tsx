@@ -6,17 +6,20 @@ import MapScreen from "@/components/game/MapScreen";
 import { LEVELS } from "@/components/game/levels";
 import { detectLang, saveLang, type Lang } from "@/components/game/i18n";
 import {
-  AD_COIN_REWARD,
   awardLevel,
   buyBooster,
   firstClearOf,
   loadProgress,
+  PRICES,
   saveProgress,
   spendBooster,
   START_PROGRESS,
   type BoosterKind,
   type Progress,
 } from "@/components/game/progress";
+
+/** Сколько монет даёт просмотр рекламы */
+const AD_REWARD = 110;
 
 type View = "map" | "game";
 
@@ -79,8 +82,10 @@ export default function Home() {
   };
 
   const handleBuy = (kind: BoosterKind): boolean => {
-    // покупка прямо в игре: false — не хватило монет (тогда игра предложит рекламу)
-    const next = buyBooster(progressRef.current, kind);
+    const price = PRICES[kind];
+    const p = progressRef.current;
+    if (p.coins < price) return false;
+    const next = buyBooster(p, kind);
     if (!next) return false;
     progressRef.current = next;
     setProgress(next);
@@ -88,13 +93,12 @@ export default function Home() {
     return true;
   };
 
-  /** Награда за просмотр рекламы: +N монет; возвращает новый баланс */
-  const handleAdReward = (reward: number): number => {
-    const next = { ...progressRef.current, coins: progressRef.current.coins + reward };
+  /** Награда за просмотр рекламы */
+  const handleAdReward = (n: number) => {
+    const next = { ...progressRef.current, coins: progressRef.current.coins + n };
     progressRef.current = next;
     setProgress(next);
     saveProgress(next);
-    return next.coins;
   };
 
   const handleToggleMute = () => {
@@ -122,7 +126,7 @@ export default function Home() {
           onBuy={handleBuy}
           onToggleMute={handleToggleMute}
           onAdReward={handleAdReward}
-          adReward={AD_COIN_REWARD}
+          adReward={AD_REWARD}
         />
       ) : (
         <GameScreen
@@ -137,7 +141,7 @@ export default function Home() {
           onUseBooster={handleUseBooster}
           onBuyBooster={handleBuy}
           onAdReward={handleAdReward}
-          adReward={AD_COIN_REWARD}
+          adReward={AD_REWARD}
           onLevelEnd={handleLevelEnd}
           onExit={handleExit}
         />

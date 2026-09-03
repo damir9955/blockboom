@@ -1,22 +1,19 @@
-// ── Уровни Блок Бум: цели, лимит ходов, звёзды, награды ─────────────────────
-// 50 уровней; с ростом номера: 1 → 2 → 3 задачи, камни-препятствия, больше бомб,
-// меньше ходов впрок и чуть меньше очков (scoreMultiplier 1.0 → 0.75).
+// ── Уровни БЛОК БУМ: несколько целей, лимит ходов, камни, звёзды, награды ────
 
 import { tr, type Lang } from "./i18n";
 
 export type GoalType = "lines" | "score" | "defuse" | "collect";
 
-export interface Goal {
+export interface GoalDef {
   type: GoalType;
   target: number;
-  /** цвет для collect-целей */
   color?: number;
 }
 
 export interface LevelDef {
   n: number;
-  /** 1..3 задачи уровня — победа, когда выполнены ВСЕ */
-  goals: Goal[];
+  /** 1-3 одновременных целей уровня */
+  goals: GoalDef[];
   moves: number;
   diff: number;
   /** ход, с которого на поле сами появляются бомбы (Infinity = никогда) */
@@ -25,32 +22,33 @@ export interface LevelDef {
   bombEvery: number;
   /** фигуры в лотке могут нести бомбы */
   pieceBombs: boolean;
-  /** стартовые камни-препятствия (смыть линией нельзя — только взрыв/молоток) */
+  /** камней на поле в начале уровня (0 = нет) */
   stones: number;
 }
 
 export const LEVEL_COUNT = 50;
 export const MAX_STARS = 3;
+export const TOTAL_STARS = LEVEL_COUNT * MAX_STARS;
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
 
-/** Одиночная цель уровня n (до масштабирования на количество задач) */
-function singleTarget(n: number, type: GoalType): number {
+/** Базовая (одиночная) цель уровня — растёт с номером */
+function baseTarget(n: number, type: GoalType): number {
   switch (type) {
     case "lines":
-      return clamp(2 + Math.floor(n * 0.2), 2, 10);
+      return clamp(2 + Math.floor(0.2 * n), 2, 10);
     case "score":
-      // очки с ростом уровня набираются медленнее (scoreMultiplier) — цель мягче
-      return clamp(320 + n * 33, 320, 1600);
+      return clamp(320 + 33 * n, 320, 1600);
     case "collect":
-      return clamp(11 + Math.floor(n * 0.2), 11, 16);
+      return clamp(11 + Math.floor(0.2 * n), 11, 16);
     case "defuse":
       return clamp(1 + Math.floor(n / 9), 1, 5);
   }
 }
 
+/** Минимум, ниже которого цель теряет смысл */
 function minTarget(type: GoalType): number {
   switch (type) {
     case "lines":
@@ -64,71 +62,49 @@ function minTarget(type: GoalType): number {
   }
 }
 
-function scaledTarget(n: number, type: GoalType, goalsCount: number): number {
-  const scale = goalsCount <= 1 ? 1 : goalsCount === 2 ? 0.62 : 0.52;
-  // «обезвредь» в мульти-задачах мягче: бомбы и так давят
-  if (type === "defuse" && goalsCount > 1) {
-    return Math.max(1, Math.round(singleTarget(n, type) * scale) - 1);
-  }
-  return Math.max(minTarget(type), Math.round(singleTarget(n, type) * scale));
+/** Цель с поправкой на число одновременных задач (сложнее — ниже порог) */
+function goalTargetFor(n: number, type: GoalType, goalCount: number): number {
+  const f = goalCount <= 1 ? 1 : goalCount === 2 ? 0.62 : 0.52;
+  if (type === "defuse" && goalCount > 1) return Math.max(1, Math.round(baseTarget(n, type) * f) - 1);
+  return Math.max(minTarget(type), Math.round(baseTarget(n, type) * f));
 }
 
-const GOAL_ROTATION: GoalType[] = ["lines", "score", "collect", "defuse"];
-
-/** Сколько задач на уровне: 1-14 — одна; 15-29 — две; 30+ — две/три (каждый 5-й — три) */
-function goalsCountFor(n: number): number {
-  if (n < 15) return 1;
-  if (n < 30) return 2;
-  return n % 5 === 0 ? 3 : 2;
-}
+const GOAL_TYPES: GoalType[] = ["lines", "score", "collect", "defuse"];
 
 function buildLevels(): LevelDef[] {
   const out: LevelDef[] = [];
   for (let n = 1; n <= LEVEL_COUNT; n++) {
-    const wave = Math.floor((n - 1) / 5); // волна сложности 0..9
+    const wave = Math.floor((n - 1) / 5);
     const cycle = (n - 1) % 5;
-    // базовая задача по ротации; cycle 4 — «линии» чуть крупнее
-    const baseType: GoalType =
-      cycle === 1 ? "score" : cycle === 2 ? "collect" : cycle === 3 ? "defuse" : "lines";
-    const k = goalsCountFor(n);
-
-    // типы задач: базовая + следующие по ротации (без повторов, collect максимум один)
-    const types: GoalType[] = [baseType];
-    if (k > 1) {
-      const pool = GOAL_ROTATION.filter((t) => t !== baseType);
-      for (let i = 0; i < k - 1; i++) types.push(pool[(n + i) % pool.length]);
+    const primary: GoalType = cycle === 1 ? "score" : cycle === 2 ? "collect" : cycle === 3 ? "defuse" : "lines";
+    const goalCount = n < 15 ? 1 : n < 30 ? 2 : n % 5 === 0 ? 3 : 2;
+    const types: GoalType[] = [primary];
+    if (goalCount > 1) {
+      const others = GOAL_TYPES.filter((g) => g !== primary);
+      for (let k = 0; k < goalCount - 1; k++) types.push(others[(n + k) % others.length]);
     }
-
-    const goals: Goal[] = types.map((type) => {
-      const target = scaledTarget(n, type, k);
-      if (type === "collect") return { type, target, color: 1 + ((n * 3) % 8) };
-      return { type, target };
+    const goals: GoalDef[] = types.map((type) => {
+      const target = goalTargetFor(n, type, goalCount);
+      return type === "collect" ? { type, target, color: 1 + ((3 * n) % 8) } : { type, target };
     });
-
     const hasScore = goals.some((g) => g.type === "score");
-    const moves = clamp(Math.round(18 + wave * 1.5 + (hasScore ? 2 : 0) + (k - 1) * 3), 16, 35);
-    const diff = clamp(0.05 + n * 0.016, 0, 0.78);
-    // бомбы: со временем появляются раньше и чаще; на очковых уровнях — чуть реже
+    const moves = clamp(Math.round(18 + 1.5 * wave + 2 * (hasScore ? 1 : 0) + (goalCount - 1) * 3), 16, 35);
+    const diff = clamp(0.05 + 0.016 * n, 0, 0.78);
     const bombsFrom = n <= 2 ? Infinity : Math.max(3, 12 - wave);
     const bombEvery = n <= 2 ? Infinity : Math.max(5, 9 - wave) + (hasScore ? 1 : 0);
-    // камни: с 13-го уровня, мягкая нарастающая шкала 2..5
+    // камни появляются с 13-го уровня и gradually размножаются
     const stones = n < 13 || !Number.isFinite(bombsFrom) ? 0 : Math.min(5, 2 + Math.floor((n - 13) / 7));
     out.push({ n, goals, moves, diff, bombsFrom, bombEvery, pieceBombs: n >= 9, stones });
   }
-  // Ручная калибровка первых уровней (туториальная плавность, но не «подарок»)
-  out[0] = { ...out[0], goals: [{ type: "lines", target: 2 }], moves: 14 }; // уровень 1
-  out[1] = { ...out[1], goals: [{ type: "lines", target: 3 }], moves: 16 }; // уровень 2
-  out[2] = { ...out[2], goals: [{ type: "score", target: 600 }], moves: 21 }; // уровень 3
-  out[4] = {
-    ...out[4],
-    goals: [{ type: "collect", target: 12, color: 2 }],
-    moves: 20,
-  }; // уровень 5
-  out[5] = { ...out[5], goals: [{ type: "defuse", target: 2 }], moves: 20 }; // уровень 6
-  out[6] = { ...out[6], goals: [{ type: "lines", target: 5 }], moves: 22 }; // уровень 7
-  out[17] = { ...out[17], moves: 24 }; // уровень 18: чуть жестче (collect+lines иначе слишком мягко)
-  // на уровнях с задачей «обезвредь» бомбы обязаны появляться щедро (после оверрайдов!);
-  // на поздних — чуть реже, иначе 3 жизни не выживают
+  // Ручная калибровка первых уровней (туториальная плавность)
+  out[0] = { ...out[0], goals: [{ type: "lines", target: 2 }], moves: 14 };
+  out[1] = { ...out[1], goals: [{ type: "lines", target: 3 }], moves: 16 };
+  out[2] = { ...out[2], goals: [{ type: "score", target: 600 }], moves: 21 };
+  out[4] = { ...out[4], goals: [{ type: "collect", target: 12, color: 2 }], moves: 20 };
+  out[5] = { ...out[5], goals: [{ type: "defuse", target: 2 }], moves: 20 };
+  out[6] = { ...out[6], goals: [{ type: "lines", target: 5 }], moves: 22 };
+  out[17] = { ...out[17], moves: 24 };
+  // на уровнях с целью «обезвредь» бомбы обязаны появляться щедро (после оверрайдов!)
   for (const l of out) {
     if (l.goals.some((g) => g.type === "defuse")) {
       l.bombsFrom = Math.min(l.bombsFrom, 2);
@@ -140,16 +116,6 @@ function buildLevels(): LevelDef[] {
 
 export const LEVELS: LevelDef[] = buildLevels();
 
-/** Затухание очков: чем выше уровень, тем чуть меньше набирается (сильно не режем) */
-export function scoreMultiplier(level: LevelDef): number {
-  return 1 - Math.min(0.25, (level.n - 1) * 0.005);
-}
-
-/** Первая collect-задача уровня (подмешивание цвета + подсветка блоков) */
-export function collectGoal(level: LevelDef): Goal | undefined {
-  return level.goals.find((g) => g.type === "collect");
-}
-
 export interface GoalStats {
   lines: number;
   defused: number;
@@ -157,67 +123,78 @@ export interface GoalStats {
   score: number;
 }
 
-function goalDone(g: Goal, s: GoalStats): boolean {
-  switch (g.type) {
+export function goalReached(goal: GoalDef, s: GoalStats): boolean {
+  switch (goal.type) {
     case "lines":
-      return s.lines >= g.target;
+      return s.lines >= goal.target;
     case "score":
-      return s.score >= g.target;
+      return s.score >= goal.target;
     case "defuse":
-      return s.defused >= g.target;
+      return s.defused >= goal.target;
     case "collect":
-      return s.collected >= g.target;
+      return s.collected >= goal.target;
   }
 }
 
-/** Уровень пройден, когда выполнены ВСЕ задачи */
-export function goalReached(level: LevelDef, s: GoalStats): boolean {
-  return level.goals.every((g) => goalDone(g, s));
+/** Уровень пройден, когда закрыты ВСЕ его цели */
+export function allGoalsReached(level: LevelDef, s: GoalStats): boolean {
+  return level.goals.every((g) => goalReached(g, s));
 }
 
-export interface GoalProgress {
-  label: string;
-  now: number;
-  target: number;
-  done: boolean;
-  goal: Goal;
+export function collectGoalOf(level: LevelDef): GoalDef | undefined {
+  return level.goals.find((g) => g.type === "collect");
 }
 
-/** Прогресс каждой задачи для HUD-чипов */
-export function goalProgressTexts(level: LevelDef, s: GoalStats, lang: Lang = "ru"): GoalProgress[] {
+/** Прогресс каждой цели для HUD-чипов */
+export function goalProgressList(
+  level: LevelDef,
+  s: GoalStats,
+  lang: Lang = "ru",
+): { label: string; now: number; target: number; done: boolean; goal: GoalDef }[] {
   const t = tr(lang);
-  return level.goals.map((g) => {
+  return level.goals.map((goal) => {
     const now =
-      g.type === "lines"
-        ? Math.min(s.lines, g.target)
-        : g.type === "score"
-          ? Math.min(s.score, g.target)
-          : g.type === "defuse"
-            ? Math.min(s.defused, g.target)
-            : Math.min(s.collected, g.target);
+      goal.type === "lines"
+        ? Math.min(s.lines, goal.target)
+        : goal.type === "score"
+          ? Math.min(s.score, goal.target)
+          : goal.type === "defuse"
+            ? Math.min(s.defused, goal.target)
+            : Math.min(s.collected, goal.target);
     const label =
-      g.type === "lines" ? t.goalLines : g.type === "score" ? t.goalScore : g.type === "defuse" ? t.goalDefuse : t.goalCollect;
-    return { label, now, target: g.target, done: goalDone(g, s), goal: g };
+      goal.type === "lines"
+        ? t.goalLines
+        : goal.type === "score"
+          ? t.goalScore
+          : goal.type === "defuse"
+            ? t.goalDefuse
+            : t.goalCollect;
+    return { label, now, target: goal.target, done: goalReached(goal, s), goal };
   });
 }
 
-function goalHintOne(g: Goal, lang: Lang, moves: number): string {
-  const t = tr(lang);
-  switch (g.type) {
+function goalHintText(goal: GoalDef, t: ReturnType<typeof tr>, moves: number): string {
+  switch (goal.type) {
     case "lines":
-      return t.hintLines(g.target, moves);
+      return t.hintLines(goal.target, moves);
     case "score":
-      return t.hintScore(g.target, moves);
+      return t.hintScore(goal.target, moves);
     case "defuse":
-      return t.hintDefuse(g.target);
+      return t.hintDefuse(goal.target);
     case "collect":
-      return t.hintCollect(g.target, t.colorNames[(g.color ?? 1) - 1] ?? "");
+      return t.hintCollect(goal.target, t.colorNames[(goal.color ?? 1) - 1] ?? "");
   }
 }
 
-/** Подсказка уровня (для aria у карты): все задачи через «; » */
-export function goalHint(level: LevelDef, lang: Lang = "ru"): string {
-  return level.goals.map((g) => goalHintOne(g, lang, level.moves)).join("; ");
+/** Подсказка уровня (для карты/ARIA): все цели через «; » */
+export function levelHint(level: LevelDef, lang: Lang = "ru"): string {
+  const t = tr(lang);
+  return level.goals.map((g) => goalHintText(g, t, level.moves)).join("; ");
+}
+
+/** Множитель очков: на старте 1.0, к 50-му уровню опускается до 0.75 */
+export function scoreMultiplier(level: LevelDef): number {
+  return 1 - Math.min(0.25, (level.n - 1) * 0.005);
 }
 
 /** Звёзды: 3 — много ходов в запасе и без потерь жизней, 1 — просто прошёл */
@@ -227,10 +204,6 @@ export function starsFor(movesLeftRatio: number, livesLost: number): number {
   return 1;
 }
 
-/** Монеты за победу: первый раз — крупно, реплей — скромно.
- *  Режем доход сильнее (45+35·зв → 30+20·зв, реплей 15 → 10): теперь даже
- *  идеальная победа (90) дешевле любого бустера (от 100), а реклама даёт +110 —
- *  иначе реклама не имеет смысла. */
 export const COIN_REPLAY = 10;
 
 export function coinsFor(stars: number, firstClear: boolean): number {

@@ -3,42 +3,35 @@
 export const GRID_SIZE = 8;
 export const COLOR_COUNT = 8;
 
-/** Фитиль тикает по времени: раз в столько секунд простоя (кольцо-отсчёт
- *  вокруг бомбы делает ровно один оборот за этот период). */
-export const IDLE_BOMB_TICK = 7;
+/** 0 = пусто, 1..COLOR_COUNT = id цвета блока, <0 = бомба (-таймер),
+ *  STONE_* = камень-препятствие (2 удара: целый → в трещинах → разрушен) */
+export type Grid = number[][];
 
-/** Камень-препятствие с прочностью 3: целый → с трещиной → сеть трещин → разрушен.
- *  Занимает клетку, считается «заполненным» для линий. Удар линии (смытие) снимает
- *  1 прочность — полное разрушение с 3-го раза; кратер бомбы и молоток сносят сразу.
- *  Значения в сетке: 99 = целый, 98 = трещина, 97 = сеть трещин. */
-export const STONE = 99;
-export const STONE_CRACKED = 98;
-export const STONE_HEAVY = 97;
-export const STONE_MIN = 97;
+/** Камни: 98 = целый гладкий (2 HP), 97 = весь в трещинах (1 HP) */
+export const STONE_CRACKED = 97;
+export const STONE_INTACT = 98;
 
+/** Это клетка-камень? */
 export function isStone(v: number): boolean {
-  return v >= STONE_MIN && v <= STONE;
+  return v >= STONE_CRACKED && v <= STONE_INTACT;
 }
 
-/** Стадия повреждения камня: 0 — целый, 1 — трещина, 2 — сеть трещин */
-export function stoneDamage(v: number): number {
-  return isStone(v) ? STONE - v : 0;
+/** Стадия камня для отрисовки: 0 = гладкий, 1 = в трещинах */
+export function stoneStage(v: number): number {
+  return STONE_INTACT - v;
 }
 
-/** Удар по камню: −1 прочность (99→98→97→разрушен). true — камень разрушен, клетка пустеет */
+/** Удар по камню (очистка ряда с камнем): возвращает true, если камень разрушен */
 export function hitStone(grid: Grid, r: number, c: number): boolean {
   const v = grid[r][c];
   if (!isStone(v)) return false;
-  if (v > STONE_MIN) {
+  if (v > STONE_CRACKED) {
     grid[r][c] = v - 1;
     return false;
   }
   grid[r][c] = 0;
   return true;
 }
-
-/** 0 = пусто, 1..COLOR_COUNT = id цвета блока */
-export type Grid = number[][];
 
 export interface Shape {
   cells: [number, number][]; // [row, col] от левого верхнего угла
@@ -162,7 +155,7 @@ export function canPlaceAnywhere(grid: Grid, s: Shape): boolean {
   return false;
 }
 
-/** Полные строки и столбцы */
+/** Полные строки и столбцы (камни и бомбы считаются заполненными) */
 export function fullLines(grid: Grid): { rows: number[]; cols: number[] } {
   const rows: number[] = [];
   const cols: number[] = [];
@@ -188,7 +181,7 @@ export interface ScoreResult {
   streakMult: number;
 }
 
-/** Очки за взрыв линий: 12 за клетку, множитель за несколько линий и серию */
+/** Очки за взорванные клетки: 12 за клетку, множитель за несколько линий и серию */
 export function clearScore(lines: number, cellsCleared: number, streak: number): ScoreResult {
   const lineMult = lines === 1 ? 1 : lines === 2 ? 2 : lines === 3 ? 4 : 6;
   const streakMult = 1 + 0.1 * Math.min(streak, 10);
@@ -215,21 +208,17 @@ export function difficultyOf(score: number): number {
   return Math.min(1, score / 2500);
 }
 
-/** Доля фигур цвета цели на collect-уровнях (подмешивается в генерацию).
- *  Подобрана симуляцией: цель выпадает ~34% против ~12% у остальных — заметно,
- *  но не решает уровень за игрока (жёлтые не должны «сыпаться»). */
-export const COLOR_BIAS = 0.25;
+/** Доля клеток цвета цели в лотке (подсветка «собери цвет») */
+export const GOAL_COLOR_BIAS = 0.25;
 
 /** Тройка новых фигур; гарантирует, что хотя бы одна влезает на поле.
- *  colorBias — цвет цели collect-уровня: фигуры этого цвета выпадают заметно чаще,
- *  иначе цель "собери N блоков цвета" математически недостижима.
- *  biasStrength — доля фигур цвета цели (по умолчанию COLOR_BIAS, для калибровки в симуляциях). */
+ *  goalColor — цвет цели «собери»: такие блоки выпадают чаще. */
 export function generatePieces(
   grid: Grid,
   difficulty: number,
   allowBomb = false,
-  colorBias?: number,
-  biasStrength: number = COLOR_BIAS,
+  goalColor?: number,
+  goalBias = GOAL_COLOR_BIAS,
 ): Piece[] {
   const t = Math.max(0, Math.min(1, difficulty));
   const smallBias = 1 - 0.5 * t;
@@ -248,22 +237,15 @@ export function generatePieces(
     return SHAPES[0];
   };
   const randColor = () => {
-    if (
-      colorBias !== undefined &&
-      colorBias >= 1 &&
-      colorBias <= COLOR_COUNT &&
-      Math.random() < biasStrength
-    ) {
-      return colorBias;
-    }
-    return 1 + Math.floor(Math.random() * COLOR_COUNT);
+    const bias = goalColor !== undefined && goalColor >= 1 && goalColor <= 8;
+    return bias && Math.random() < goalBias ? goalColor : 1 + Math.floor(Math.random() * COLOR_COUNT);
   };
   const fresh = (): Piece => ({ shape: pick(), color: randColor(), bomb: null, bombTimer: null });
 
   for (let attempt = 0; attempt < 12; attempt++) {
     const pieces: Piece[] = [fresh(), fresh(), fresh()];
     // одна фигура из тройки может нести бомбу (не больше одной на сет);
-    // шанс ниже, потому что основные бомбы теперь появляются сами на поле
+    // шанс ниже, потому что основные бомбы появляются сами на поле
     if (allowBomb && Math.random() < Math.min(0.45, 0.2 + 0.28 * t)) {
       const p = pieces[Math.floor(Math.random() * 3)];
       p.bomb = Math.floor(Math.random() * p.shape.cells.length);
@@ -300,7 +282,7 @@ export function tickBoardBombs(grid: Grid, skip: Set<number>): [number, number][
   return exploded;
 }
 
-/** Взрыв на поле: выжигает 3x3 (в т.ч. другие бомбы — без потери жизни).
+/** Взрыв на поле: выжигает 3x3 (в т.ч. камни и другие бомбы — без потери жизни).
  *  Возвращает [r, c, старое значение] для частиц. */
 export function explodeCrater(grid: Grid, r: number, c: number): [number, number, number][] {
   const cleared: [number, number, number][] = [];
@@ -361,6 +343,22 @@ export function spawnBoardBomb(grid: Grid, timer: number): [number, number] | nu
   return [r, c];
 }
 
+/** Камни на случайных пустых клетках в начале уровня (препятствия) */
+export function spawnStones(grid: Grid, count: number): [number, number][] {
+  const placed: [number, number][] = [];
+  let attempts = 0;
+  while (placed.length < count && attempts < 500) {
+    attempts += 1;
+    const r = Math.floor(GRID_SIZE * Math.random());
+    const c = Math.floor(GRID_SIZE * Math.random());
+    if (grid[r][c] === 0) {
+      grid[r][c] = STONE_INTACT;
+      placed.push([r, c]);
+    }
+  }
+  return placed;
+}
+
 /** Сколько бомб сейчас на поле (клетки с отрицательным значением) */
 export function boardBombCount(grid: Grid): number {
   let n = 0;
@@ -376,30 +374,12 @@ export function boardBombTimerFor(difficulty: number): number {
   return Math.max(7, 12 - Math.floor(t * 4));
 }
 
-/** Молоток: убрать один блок (в т.ч. бомбу). Возвращает старое значение (0 = пусто) */
+/** Молоток: убрать один блок (в т.ч. бомбу или камень). Возвращает старое значение (0 = пусто) */
 export function applyHammer(grid: Grid, r: number, c: number): number {
   if (r < 0 || c < 0 || r >= GRID_SIZE || c >= GRID_SIZE) return 0;
   const v = grid[r][c];
   grid[r][c] = 0;
   return v;
-}
-
-/** Расставить камни-препятствия на пустых клетках (стартовая раскладка уровня).
- *  Камни усложняют поле: линия бьёт их (3 удара на разрушение), взрыв бомбы
- *  и молоток сносят сразу. */
-export function spawnStones(grid: Grid, count: number): [number, number][] {
-  const placed: [number, number][] = [];
-  let guard = 0;
-  while (placed.length < count && guard < 500) {
-    guard++;
-    const r = Math.floor(Math.random() * GRID_SIZE);
-    const c = Math.floor(Math.random() * GRID_SIZE);
-    if (grid[r][c] === 0) {
-      grid[r][c] = STONE;
-      placed.push([r, c]);
-    }
-  }
-  return placed;
 }
 
 /** Ходов между появлениями полевых бомб (давление растёт со сложностью) */
