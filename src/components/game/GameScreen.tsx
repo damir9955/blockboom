@@ -12,10 +12,8 @@ import {
   Heart,
   Plus,
   RotateCcw,
-  ShoppingCart,
   Shuffle,
   Star,
-  Video,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -80,9 +78,10 @@ import {
   type LevelDef,
 } from "./levels";
 import { tr, type Lang, type Strings } from "./i18n";
-import { PRICES, type BoosterKind } from "./progress";
-import AdOverlay, { isNativeYandexAds, showRewardedAd } from "./AdOverlay";
-import BuyConfirm from "./BuyConfirm";
+import { PRICES, type BoosterKind, type TipKind } from "./progress";
+import CoinsModal from "./CoinsModal";
+import ToolModal from "./ToolModal";
+import TipOverlay from "./TipOverlay";
 
 export interface LevelResult {
   levelN: number;
@@ -99,11 +98,15 @@ interface Props {
   coins: number;
   muted: boolean;
   lang: Lang;
+  /** уже показанные игроку краткие подсказки */
+  tips: Record<TipKind, boolean>;
   onToggleMute: () => void;
   onUseBooster: (kind: BoosterKind) => void;
   onBuyBooster: (kind: BoosterKind) => boolean;
   onAdReward: (n: number) => void;
   adReward: number;
+  /** отметить подсказку показанной (сохраняется в прогресс) */
+  onTipSeen: (kind: TipKind) => void;
   onLevelEnd: (result: LevelResult, goNext: boolean) => void;
   onExit: () => void;
 }
@@ -298,11 +301,13 @@ export default function GameScreen({
   coins,
   muted,
   lang,
+  tips,
   onToggleMute,
   onUseBooster,
   onBuyBooster,
   onAdReward,
   adReward,
+  onTipSeen,
   onLevelEnd,
   onExit,
 }: Props) {
@@ -315,10 +320,9 @@ export default function GameScreen({
   const movesLeftRef = useRef(level.moves);
   const phaseRef = useRef<"play" | "won" | "lost">("play");
   const timersRef = useRef<number[]>([]);
-  const shopOpenRef = useRef(false);
-  const adOpenRef = useRef(false);
-  const pendingBuyRef = useRef<BoosterKind | null>(null);
-  const adFailTimerRef = useRef<number>(0);
+  /** какие оверлеи открыты — на них игра на паузе (фитиль не горит) */
+  const uiRef = useRef({ tip: null as TipKind | null, tool: null as BoosterKind | null, coins: false });
+  const tipsRef = useRef(tips);
 
   const [score, setScore] = useState(0);
   const [streak, setStreak] = useState(0);
@@ -333,11 +337,14 @@ export default function GameScreen({
   const [showOverlay, setShowOverlay] = useState(false);
   const [armed, setArmed] = useState(false);
   const [goalsFlash, setGoalsFlash] = useState(true);
-  const [shopOpen, setShopOpen] = useState(false);
-  const [pendingBuy, setPendingBuy] = useState<BoosterKind | null>(null);
-  const [adOpen, setAdOpen] = useState(false);
-  const [adLoading, setAdLoading] = useState(false);
-  const [adFailed, setAdFailed] = useState(false);
+  const [coinsOpen, setCoinsOpen] = useState(false);
+  const [toolKind, setToolKind] = useState<BoosterKind | null>(null);
+  // краткая подсказка при старте: уровень 1 — «как играть», первый уровень с камнями — про камни
+  const [tip, setTip] = useState<TipKind | null>(() => {
+    if (level.n === 1 && !tips.start) return "start";
+    if (level.stones > 0 && !tips.stone) return "stone";
+    return null;
+  });
 
   const getSfx = useCallback((): Sfx => {
     if (!sfxRef.current) sfxRef.current = new Sfx();
@@ -349,12 +356,12 @@ export default function GameScreen({
     timersRef.current.push(id);
   };
 
-  // Инициализация: фигуры сразу; вспышка целей гаснет через 4 секунды
+  // Инициализация: фигуры сразу; вспышка целей гаснет через ~7.5 секунд
   useEffect(() => {
     const g = gameRef.current;
     g.pieces = generatePieces(g.grid, level.diff, false, g.goalColor);
     refreshDead(g);
-    const id = window.setTimeout(() => setGoalsFlash(false), 4000);
+    const id = window.setTimeout(() => setGoalsFlash(false), 7600);
     return () => {
       window.clearTimeout(id);
       timersRef.current.forEach((tid) => window.clearTimeout(tid));
@@ -367,9 +374,17 @@ export default function GameScreen({
     if (sfxRef.current) sfxRef.current.muted = muted;
   }, [muted]);
 
+  // Синхронизация подсказок и открытых оверлеев с рефами (пауза игрового цикла)
   useEffect(() => {
-    pendingBuyRef.current = pendingBuy;
-  }, [pendingBuy]);
+    tipsRef.current = tips;
+    uiRef.current.tip = tip;
+  }, [tips, tip]);
+  useEffect(() => {
+    uiRef.current.tool = toolKind;
+  }, [toolKind]);
+  useEffect(() => {
+    uiRef.current.coins = coinsOpen;
+  }, [coinsOpen]);
 
   // Отладочный хук для e2e-тестов (только в dev-сборке)
   useEffect(() => {
@@ -488,7 +503,9 @@ export default function GameScreen({
       const g = gameRef.current;
       const L = layoutRef.current;
       const canvas = canvasRef.current;
-      const blocked = g.over || shopOpenRef.current || adOpenRef.current;
+      // Пауза: победа/поражение или любой открытый оверлей (подсказка/панель/монеты/реклама)
+      const ui = uiRef.current;
+      const blocked = g.over || ui.tip !== null || ui.tool !== null || ui.coins;
       if (!blocked) {
         g.fuseAcc += dt;
         // фитиль сгорел на круг: тик бомб (и во время драга — «сидеть» на бомбе нельзя)
@@ -744,6 +761,14 @@ export default function GameScreen({
       }
       refreshDead(g);
 
+      // 5.5 первая бомба — краткая подсказка (один раз)
+      if (
+        !tipsRef.current.bomb &&
+        (boardBombCount(g.grid) > 0 || g.pieces.some((p) => p && p.bombTimer !== null))
+      ) {
+        setTip("bomb");
+      }
+
       // 6. тревожный тик при почти догоревшем фитиле
       if (!g.over && hasLowBomb(g)) sfx.tick();
 
@@ -849,7 +874,7 @@ export default function GameScreen({
   );
 
   // Перемешать лоток
-  const useShuffle = useCallback(() => {
+  const doShuffle = useCallback(() => {
     const g = gameRef.current;
     if (phaseRef.current !== "play" || boosters.shuffle <= 0) return;
     const fresh = generatePieces(
@@ -870,7 +895,7 @@ export default function GameScreen({
   }, [boosters.shuffle, getSfx, level, onUseBooster]);
 
   // +5 ходов
-  const usePlus5 = useCallback(() => {
+  const doPlus5 = useCallback(() => {
     const g = gameRef.current;
     if (phaseRef.current !== "play" || boosters.plus5 <= 0) return;
     movesLeftRef.current += 5;
@@ -890,80 +915,37 @@ export default function GameScreen({
     onUseBooster("plus5");
   }, [boosters.plus5, getSfx, onUseBooster, t]);
 
-  // ── Магазин / покупка / реклама ───────────────────────────────────────────
-  const openShop = useCallback(() => {
-    if (phaseRef.current !== "play") return;
-    shopOpenRef.current = true;
-    setShopOpen(true);
-  }, []);
-
-  const closeShop = useCallback(() => {
-    shopOpenRef.current = false;
-    setShopOpen(false);
-  }, []);
-
-  const closeAd = useCallback(() => {
-    adOpenRef.current = false;
-    setAdOpen(false);
-    setAdLoading(false);
-  }, []);
-
-  // клик «Купить» в магазине — сначала подтверждение
-  const handleBuyClick = useCallback(
-    (kind: BoosterKind) => {
-      if (phaseRef.current !== "play" || coins < PRICES[kind]) return;
-      setPendingBuy(kind);
+  // ── Монеты / инструмент / подсказки ──────────────────────────────────────────
+  // покупка инструмента из панели (монеты могли прийти за рекламу)
+  const handleToolBuy = useCallback(
+    (kind: BoosterKind): boolean => {
+      const ok = onBuyBooster(kind);
+      if (ok) {
+        getSfx().coin();
+        vibrate(12);
+      }
+      return ok;
     },
-    [coins],
+    [getSfx, onBuyBooster],
   );
 
-  // подтверждение покупки
-  const confirmBuy = useCallback(() => {
-    const kind = pendingBuyRef.current;
-    if (!kind) return;
-    setPendingBuy(null);
-    if (onBuyBooster(kind)) {
+  // награда за рекламу (модалки монет/инструмента)
+  const handleAdReward = useCallback(
+    (n: number) => {
+      onAdReward(n);
       getSfx().coin();
-      vibrate(12);
-    }
-  }, [getSfx, onBuyBooster]);
+      vibrate([15, 30, 15]);
+    },
+    [getSfx, onAdReward],
+  );
 
-  // награда за рекламу
-  const claimAdReward = useCallback(() => {
-    onAdReward(adReward);
-    getSfx().coin();
-    vibrate([15, 30, 15]);
-    closeAd();
-  }, [adReward, closeAd, getSfx, onAdReward]);
-
-  const abortAd = useCallback(() => {
-    closeAd();
-  }, [closeAd]);
-
-  // «Пополнить +N» — нативная реклама или демо-ролик
-  const handleTopUp = useCallback(() => {
-    if (adOpenRef.current) return;
-    if (isNativeYandexAds()) {
-      adOpenRef.current = true;
-      setAdOpen(true);
-      setAdLoading(true);
-      void showRewardedAd().then((res) => {
-        if (res === "rewarded") {
-          claimAdReward();
-        } else {
-          closeAd();
-          if (res === "failed") {
-            setAdFailed(true);
-            window.clearTimeout(adFailTimerRef.current);
-            adFailTimerRef.current = window.setTimeout(() => setAdFailed(false), 3500);
-          }
-        }
-      });
-    } else {
-      adOpenRef.current = true;
-      setAdOpen(true);
-    }
-  }, [claimAdReward, closeAd]);
+  // закрыть подсказку и отметить её показанной навсегда
+  const dismissTip = useCallback(() => {
+    const kind = tip;
+    if (!kind) return;
+    setTip(null);
+    onTipSeen(kind);
+  }, [onTipSeen, tip]);
 
   // ── Указатель ─────────────────────────────────────────────────────────────
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -1093,12 +1075,11 @@ export default function GameScreen({
     setArmed(false);
     setLoseReason(null);
     setGoalsFlash(true);
-    addTimer(window.setTimeout(() => setGoalsFlash(false), 4000));
-    closeShop();
-    closeAd();
-    setAdFailed(false);
-    setPendingBuy(null);
-  }, [level, closeShop, closeAd]);
+    addTimer(window.setTimeout(() => setGoalsFlash(false), 7600));
+    setCoinsOpen(false);
+    setToolKind(null);
+    setTip(null);
+  }, [level]);
 
   const goals = goalProgressList(level, { lines: linesCleared, defused, collected, score }, lang);
 
@@ -1114,18 +1095,18 @@ export default function GameScreen({
   const handleToMap = () => onLevelEnd(resultPayload(phase === "won"), false);
   const handleRetryToMap = () => onLevelEnd(resultPayload(false), false);
 
-  const shopItems: { kind: BoosterKind; label: string; Icon: ElementType; price: number; tone: string }[] = [
+  const toolItems: { kind: BoosterKind; label: string; Icon: ElementType; price: number; tone: string }[] = [
     { kind: "hammer", label: t.hammer, Icon: Hammer, price: PRICES.hammer, tone: "bg-rose-500" },
     { kind: "shuffle", label: t.shuffle, Icon: Shuffle, price: PRICES.shuffle, tone: "bg-teal-500" },
     { kind: "plus5", label: `+${t.plus5}`, Icon: Plus, price: PRICES.plus5, tone: "bg-amber-500" },
   ];
-  const pendingItem = shopItems.find((i) => i.kind === pendingBuy) ?? null;
-  const PendingIcon = pendingItem?.Icon;
+  const toolItem = toolItems.find((i) => i.kind === toolKind) ?? null;
+  const ToolIcon = toolItem?.Icon;
 
   return (
     <div className="flex min-h-[100dvh] w-full flex-col items-center bg-[#131118] bg-gradient-to-b from-[#1a1723] via-[#141219] to-[#0f0e14] text-white select-none">
       <main className="flex w-full max-w-[420px] flex-1 flex-col px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-[max(env(safe-area-inset-top),12px)]">
-        {/* Верхняя строка: выход, жизни, звук */}
+        {/* Верхняя строка: выход, жизни, монеты, звук */}
         <div className="flex items-center justify-between gap-2 pb-1">
           <button
             type="button"
@@ -1145,14 +1126,25 @@ export default function GameScreen({
               />
             ))}
           </div>
-          <button
-            type="button"
-            onClick={onToggleMute}
-            aria-label={muted ? t.soundOnAria : t.soundOffAria}
-            className="rounded-xl border border-white/10 bg-white/5 p-2.5 text-white/70 transition active:scale-90 hover:bg-white/10"
-          >
-            {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCoinsOpen(true)}
+              aria-label={t.coinsOpenAria}
+              className="flex items-center gap-1.5 rounded-xl border border-amber-400/25 bg-amber-400/10 px-2.5 py-2 text-sm font-black text-amber-300 tabular-nums transition active:scale-90 hover:bg-amber-400/20"
+            >
+              <Coins className="size-4" aria-hidden="true" />
+              <span key={coins} className="score-pop">{coins}</span>
+            </button>
+            <button
+              type="button"
+              onClick={onToggleMute}
+              aria-label={muted ? t.soundOnAria : t.soundOffAria}
+              className="rounded-xl border border-white/10 bg-white/5 p-2.5 text-white/70 transition active:scale-90 hover:bg-white/10"
+            >
+              {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+            </button>
+          </div>
         </div>
 
         {/* Номер уровня */}
@@ -1160,9 +1152,9 @@ export default function GameScreen({
           {t.levelNChip(level.n)}
         </div>
 
-        {/* Цели уровня */}
+        {/* Цели уровня — крупно, с долгой вспышкой */}
         <div
-          className="flex flex-wrap items-center justify-center gap-2 pb-1.5"
+          className="flex flex-wrap items-center justify-center gap-2.5 pb-2"
           role="status"
           aria-label={t.goalsAria}
         >
@@ -1172,29 +1164,29 @@ export default function GameScreen({
             return (
               <div
                 key={`${i}-${gl.label}`}
-                className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold ${
+                className={`flex items-center gap-2.5 rounded-xl border px-4 py-2.5 text-base font-black ${
                   gl.done
                     ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
-                    : "border-white/10 bg-white/5 text-white/80"
+                    : "border-white/10 bg-white/5 text-white/85"
                 } ${goalsFlash ? "goal-flash" : ""}`}
-                style={goalsFlash ? { animationDelay: `${0.12 * i}s` } : undefined}
+                style={goalsFlash ? { animationDelay: `${0.15 * i}s` } : undefined}
                 aria-label={t.goalAria(gl.label, gl.now, gl.target)}
               >
                 {swatch ? (
                   <span
-                    className="inline-block size-4 shrink-0 rounded-[4px]"
+                    className="inline-block size-5 shrink-0 rounded-[5px] shadow-sm"
                     style={{ background: swatch }}
                     aria-hidden="true"
                   />
                 ) : gl.goal.type === "defuse" ? (
-                  <Bomb className="size-5 shrink-0 text-rose-400" aria-hidden="true" />
+                  <Bomb className="size-6 shrink-0 text-rose-400" aria-hidden="true" />
                 ) : gl.goal.type === "score" ? (
-                  <Star className="size-5 shrink-0 text-amber-400" aria-hidden="true" />
+                  <Star className="size-6 shrink-0 text-amber-400" aria-hidden="true" />
                 ) : (
-                  <Flame className="size-5 shrink-0 text-orange-400" aria-hidden="true" />
+                  <Flame className="size-6 shrink-0 text-orange-400" aria-hidden="true" />
                 )}
                 <span className="tabular-nums">
-                  {gl.label} {gl.now}/{gl.target}
+                  {gl.label} <span className={gl.done ? "" : "text-white/50"}>{gl.now}</span>/{gl.target}
                 </span>
               </div>
             );
@@ -1341,197 +1333,112 @@ export default function GameScreen({
           )}
         </div>
 
-        {/* Бустеры + магазин */}
-        <div className="mt-3 grid grid-cols-4 gap-2">
+        {/* Инструменты: крупные, с цветной подсветкой; если нет — панель покупки/рекламы */}
+        <div className="mt-3 grid grid-cols-3 gap-2.5">
           <button
             type="button"
-            onClick={toggleHammer}
-            disabled={boosters.hammer <= 0 || phase !== "play"}
-            aria-label={t.hammerAria(boosters.hammer)}
-            className={`relative flex items-center justify-center gap-1.5 rounded-xl border py-2.5 text-xs font-bold transition active:scale-95 disabled:opacity-35 ${
+            onClick={() => (boosters.hammer > 0 ? toggleHammer() : setToolKind("hammer"))}
+            disabled={phase !== "play"}
+            aria-label={boosters.hammer > 0 ? t.hammerAria(boosters.hammer) : t.buyAria(t.hammer, PRICES.hammer, 0)}
+            className={`relative flex flex-col items-center justify-center gap-1 rounded-2xl border py-3 text-xs font-black transition active:scale-95 disabled:opacity-35 ${
               armed
-                ? "border-rose-400/60 bg-rose-500/20 text-rose-300"
-                : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"
+                ? "border-rose-300/70 bg-gradient-to-b from-rose-500/40 to-rose-500/10 text-rose-200 shadow-lg shadow-rose-950/40 ring-2 ring-rose-400/40"
+                : "border-rose-400/30 bg-gradient-to-b from-rose-500/15 to-rose-500/5 text-rose-200/90 hover:from-rose-500/25"
             }`}
           >
-            <Hammer className="size-4" aria-hidden="true" />
-            {t.hammer}
-            {boosters.hammer > 0 && (
-              <span className="absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full bg-rose-500 text-[10px] font-black text-white">
+            <span className="flex items-center gap-1.5">
+              <Hammer className="size-5" aria-hidden="true" />
+              {t.hammer}
+            </span>
+            {boosters.hammer > 0 ? (
+              <span className="absolute -right-1.5 -top-1.5 grid size-6 place-items-center rounded-full bg-rose-500 text-[11px] font-black text-white shadow-md">
                 {boosters.hammer}
               </span>
+            ) : (
+              <span className="flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-black text-amber-300 tabular-nums">
+                <Coins className="size-3" aria-hidden="true" />
+                {PRICES.hammer}
+              </span>
             )}
           </button>
           <button
             type="button"
-            onClick={useShuffle}
-            disabled={boosters.shuffle <= 0 || phase !== "play"}
-            aria-label={t.shuffleAria(boosters.shuffle)}
-            className="relative flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 py-2.5 text-xs font-bold text-white/70 transition active:scale-95 hover:bg-white/10 disabled:opacity-35"
+            onClick={() => (boosters.shuffle > 0 ? doShuffle() : setToolKind("shuffle"))}
+            disabled={phase !== "play"}
+            aria-label={boosters.shuffle > 0 ? t.shuffleAria(boosters.shuffle) : t.buyAria(t.shuffle, PRICES.shuffle, 0)}
+            className="relative flex flex-col items-center justify-center gap-1 rounded-2xl border border-teal-400/30 bg-gradient-to-b from-teal-500/15 to-teal-500/5 py-3 text-xs font-black text-teal-200/90 transition active:scale-95 hover:from-teal-500/25 disabled:opacity-35"
           >
-            <Shuffle className="size-4" aria-hidden="true" />
-            {t.shuffle}
-            {boosters.shuffle > 0 && (
-              <span className="absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full bg-teal-500 text-[10px] font-black text-white">
+            <span className="flex items-center gap-1.5">
+              <Shuffle className="size-5" aria-hidden="true" />
+              {t.shuffle}
+            </span>
+            {boosters.shuffle > 0 ? (
+              <span className="absolute -right-1.5 -top-1.5 grid size-6 place-items-center rounded-full bg-teal-500 text-[11px] font-black text-white shadow-md">
                 {boosters.shuffle}
               </span>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={usePlus5}
-            disabled={boosters.plus5 <= 0 || phase !== "play"}
-            aria-label={t.plus5Aria(boosters.plus5)}
-            className="relative flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 py-2.5 text-xs font-bold text-white/70 transition active:scale-95 hover:bg-white/10 disabled:opacity-35"
-          >
-            <Plus className="size-4" aria-hidden="true" />
-            {t.plus5}
-            {boosters.plus5 > 0 && (
-              <span className="absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full bg-amber-500 text-[10px] font-black text-white">
-                {boosters.plus5}
+            ) : (
+              <span className="flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-black text-amber-300 tabular-nums">
+                <Coins className="size-3" aria-hidden="true" />
+                {PRICES.shuffle}
               </span>
             )}
           </button>
           <button
             type="button"
-            onClick={openShop}
+            onClick={() => (boosters.plus5 > 0 ? doPlus5() : setToolKind("plus5"))}
             disabled={phase !== "play"}
-            aria-label={t.shopAria}
-            className="relative flex items-center justify-center gap-1.5 rounded-xl border border-amber-400/30 bg-amber-400/10 py-2.5 text-xs font-bold text-amber-300 transition active:scale-95 hover:bg-amber-400/20 disabled:opacity-35"
+            aria-label={boosters.plus5 > 0 ? t.plus5Aria(boosters.plus5) : t.buyAria(`+${t.plus5}`, PRICES.plus5, 0)}
+            className="relative flex flex-col items-center justify-center gap-1 rounded-2xl border border-amber-400/30 bg-gradient-to-b from-amber-500/15 to-amber-500/5 py-3 text-xs font-black text-amber-200/90 transition active:scale-95 hover:from-amber-500/25 disabled:opacity-35"
           >
-            <ShoppingCart className="size-4" aria-hidden="true" />
-            {t.shop}
-            <span
-              className="absolute -right-1.5 -top-1.5 grid min-w-5 place-items-center rounded-full bg-amber-500 px-1 text-[10px] font-black text-white tabular-nums"
-              aria-hidden="true"
-            >
-              {coins}
+            <span className="flex items-center gap-1.5">
+              <Plus className="size-5" aria-hidden="true" />
+              {t.plus5}
             </span>
+            {boosters.plus5 > 0 ? (
+              <span className="absolute -right-1.5 -top-1.5 grid size-6 place-items-center rounded-full bg-amber-500 text-[11px] font-black text-white shadow-md">
+                {boosters.plus5}
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-black text-amber-300 tabular-nums">
+                <Coins className="size-3" aria-hidden="true" />
+                {PRICES.plus5}
+              </span>
+            )}
           </button>
         </div>
       </main>
 
-      {/* Магазин внутри уровня */}
-      {shopOpen && phase === "play" && !adOpen && (
-        <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-          aria-label={t.shopAria}
-        >
-          <div className="w-[88%] max-w-xs rounded-2xl border border-white/10 bg-[#1c1a24] p-5 shadow-2xl">
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-sm font-black uppercase tracking-widest text-white/70">{t.shop}</div>
-              <div
-                key={coins}
-                className="score-pop flex items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1 text-sm font-black text-amber-300 tabular-nums"
-                aria-label={t.shopCoinsAria(coins)}
-              >
-                <Coins className="size-4" aria-hidden="true" />
-                {coins}
-              </div>
-            </div>
-            <div className="mt-4 flex flex-col gap-2">
-              {shopItems.map(({ kind, label, Icon, price, tone }) => {
-                const affordable = coins >= price;
-                return (
-                  <div key={kind} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3">
-                    <span className="relative shrink-0">
-                      <span className={`grid size-10 place-items-center rounded-lg ${tone}`}>
-                        <Icon className="size-5 text-white" aria-hidden="true" />
-                      </span>
-                      <span
-                        className="absolute -right-2 -top-1.5 grid min-w-5 place-items-center rounded-full bg-white px-1 text-[10px] font-black text-black"
-                        aria-label={t.have(boosters[kind])}
-                      >
-                        {boosters[kind]}
-                      </span>
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-bold text-white/85">{label}</div>
-                      <div className="mt-0.5 flex items-center gap-1 text-xs font-black text-amber-300 tabular-nums">
-                        <Coins className="size-3" aria-hidden="true" />
-                        {price}
-                      </div>
-                      {!affordable && (
-                        <div
-                          className="mt-0.5 whitespace-nowrap text-[11px] leading-tight text-rose-300/80"
-                          aria-label={t.needed(price - coins)}
-                        >
-                          {t.needed(price - coins)}
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleBuyClick(kind)}
-                      disabled={!affordable}
-                      aria-label={t.buyAria(label, price, boosters[kind])}
-                      className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-gradient-to-b from-amber-400 to-orange-500 px-3.5 py-2 text-xs font-black text-[#221a08] shadow-md shadow-orange-950/40 transition active:scale-95 disabled:opacity-40"
-                    >
-                      <Coins className="size-3.5" aria-hidden="true" />
-                      {t.buy}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-            {adFailed && (
-              <div className="mt-2 text-center text-[11px] font-bold text-rose-300/90" role="status">
-                {t.adUnavailable}
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={handleTopUp}
-              aria-label={t.topUpAria(adReward)}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-teal-400/40 bg-gradient-to-b from-teal-500/20 to-teal-500/10 py-2.5 text-sm font-black text-teal-300 transition active:scale-95 hover:bg-teal-500/25"
-            >
-              <Video className="size-4" aria-hidden="true" />
-              {t.topUp(adReward)}
-              <span className="text-[11px] font-bold text-teal-300/60">{t.topUpNote}</span>
-            </button>
-            <button
-              type="button"
-              onClick={closeShop}
-              className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-bold text-white/70 transition active:scale-95 hover:bg-white/10"
-            >
-              {t.close}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Краткая подсказка (старт/бомба/камень) — игра на паузе */}
+      {tip !== null && <TipOverlay lang={lang} kind={tip} onDismiss={dismissTip} />}
 
-      {/* Подтверждение покупки */}
-      {pendingItem && PendingIcon && phase === "play" && !adOpen && (
-        <BuyConfirm
+      {/* Монеты: баланс и пополнение за рекламу */}
+      {coinsOpen && (
+        <CoinsModal
           lang={lang}
-          name={pendingItem.label}
-          price={pendingItem.price}
-          count={boosters[pendingItem.kind]}
-          tone={pendingItem.tone}
-          icon={<PendingIcon className="size-6 text-white" aria-hidden="true" />}
-          onConfirm={confirmBuy}
-          onCancel={() => setPendingBuy(null)}
+          coins={coins}
+          reward={adReward}
+          onAdReward={handleAdReward}
+          onClose={() => setCoinsOpen(false)}
         />
       )}
 
-      {/* Реклама: демо-ролик (веб) */}
-      {adOpen && !adLoading && (
-        <AdOverlay lang={lang} reward={adReward} onClaim={claimAdReward} onAbort={abortAd} />
-      )}
-
-      {/* Реклама: загрузка нативного ролика */}
-      {adOpen && adLoading && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
-          role="status"
-          aria-live="polite"
-        >
-          <div className="rounded-2xl border border-white/10 bg-[#1c1a24] px-6 py-4 text-sm font-bold text-white/80 shadow-2xl">
-            {t.adLoading}
-          </div>
-        </div>
+      {/* Панель инструмента: купить за монеты или рекламу (автопокупки нет) */}
+      {toolItem && ToolIcon && (
+        <ToolModal
+          lang={lang}
+          label={toolItem.label}
+          Icon={ToolIcon}
+          tone={toolItem.tone}
+          price={toolItem.price}
+          count={boosters[toolItem.kind]}
+          coins={coins}
+          reward={adReward}
+          onBuy={() => {
+            if (handleToolBuy(toolItem.kind)) setToolKind(null);
+          }}
+          onAdReward={handleAdReward}
+          onClose={() => setToolKind(null)}
+        />
       )}
     </div>
   );

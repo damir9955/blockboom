@@ -118,6 +118,74 @@ export interface Strings {
   defuse100: string;
   plus5Text: string;
   minusLife: string;
+  // главное меню
+  menuAria: string;
+  menuContinue: string;
+  menuContinueAll: string;
+  menuLevelSub: (n: number) => string;
+  menuLevelSelect: string;
+  menuHelp: string;
+  menuSettings: string;
+  menuContinueAria: (n: number) => string;
+  menuLevelSelectAria: string;
+  menuHelpAria: string;
+  menuSettingsAria: string;
+  backToMenuAria: string;
+  menuFooterLevels: (done: number, total: number) => string;
+  menuFooterStars: (s: number, total: number) => string;
+  // подарок за ежедневный вход
+  giftTitle: string;
+  giftClaim: (n: number) => string;
+  giftClaimed: string;
+  giftAria: (n: number) => string;
+  giftSectionAria: string;
+  // модалка монет
+  coinsTitle: string;
+  coinsTotal: string;
+  coinsHow: string;
+  coinsOpenAria: string;
+  // панель инструмента (в уровне)
+  toolPanelAria: (label: string) => string;
+  toolEmpty: string;
+  // краткие подсказки в игре
+  tipAria: string;
+  tipGotIt: string;
+  tipPlay: string;
+  tipStartTitle: string;
+  tipStartA: string;
+  tipStartB: string;
+  tipStartC: string;
+  tipBombTitle: string;
+  tipBombA: string;
+  tipBombB: string;
+  tipBombC: string;
+  tipStoneTitle: string;
+  tipStoneA: string;
+  tipStoneB: string;
+  tipStoneC: string;
+  // помощь: разделы с картинками
+  helpTitle: string;
+  helpBasicsTitle: string;
+  helpBasicsText: string;
+  helpGoalsTitle: string;
+  helpGoalsText: string;
+  helpLinesTitle: string;
+  helpLinesText: string;
+  helpBombsTitle: string;
+  helpBombsText: string;
+  helpStonesTitle: string;
+  helpStonesText: string;
+  helpCollectTitle: string;
+  helpCollectText: string;
+  helpToolsTitle: string;
+  helpToolsText: string;
+  helpCoinsTitle: string;
+  helpCoinsText: string;
+  // настройки
+  settingsTitle: string;
+  settingsSound: string;
+  settingsLang: string;
+  settingsLangAria: string;
 }
 
 const ru: Strings = {
@@ -143,14 +211,90 @@ const ru: Strings = {
   goalAria: (label, now, target) => `Цель уровня: ${label} ${now} из ${target}`,
   goalsAria: "Задачи уровня",
   livesAria: (n) => `Жизни: ${n} из 3`,
-  exitAria: "Выйти на карту уровней",
+  exitAria: "Выйти к выбору уровня",
   boardAria: "Игровое поле: перетаскивай фигуры из нижнего лотка на сетку",
   levelComplete: (n) => `Уровень ${n} пройден!`,
   coinsReward: (n) => `+${n} монет`,
   winStats: (score, movesLeft, defused) =>
     `Очки: ${score} · Ходов осталось: ${Math.max(0, movesLeft)} · Обезврежено: ${defused}`,
   nextLevel: "Следующий уровень",
-  toMap: "На карту",
+  toMap: "Выбрать уровень",
+  // главное меню
+  menuAria: "Главное меню",
+  menuContinue: "Продолжить",
+  menuContinueAll: "Все уровни пройдены!",
+  menuLevelSub: (n) => `Уровень ${n}`,
+  menuLevelSelect: "Выбрать уровень",
+  menuHelp: "Помощь",
+  menuSettings: "Настройки",
+  menuContinueAria: (n) => `Продолжить с уровня ${n}`,
+  menuLevelSelectAria: "Открыть карту уровней",
+  menuHelpAria: "Открыть помощь и правила игры",
+  menuSettingsAria: "Открыть настройки: звук и язык",
+  backToMenuAria: "Вернуться в главное меню",
+  menuFooterLevels: (done, total) => `Уровни ${done}/${total}`,
+  menuFooterStars: (s, total) => `Звёзды ${s}/${total}`,
+  // подарок за ежедневный вход
+  giftTitle: "Ежедневный подарок",
+  giftClaim: (n) => `Забрать +${n}`,
+  giftClaimed: "Получен — приходи завтра",
+  giftAria: (n) => `Забрать ежедневный подарок: ${n} монет`,
+  giftSectionAria: "Подарок за вход, монеты и инструменты",
+  // модалка монет
+  coinsTitle: "Монеты",
+  coinsTotal: "Твой баланс",
+  coinsHow: "Не хватает? Смотай рекламу — и баланс пополнится",
+  coinsOpenAria: "Монеты: пополнить за рекламу",
+  // панель инструмента (в уровне)
+  toolPanelAria: (label) => `Инструмент: ${label}`,
+  toolEmpty: "Закончился!",
+  // краткие подсказки в игре
+  tipAria: "Краткое объяснение",
+  tipGotIt: "Понятно",
+  tipPlay: "Играть!",
+  tipStartTitle: "Как играть",
+  tipStartA: "Перетаскивай фигуры из лотка на поле",
+  tipStartB: "Заполни ряд или столбец целиком — он взорвётся",
+  tipStartC: "Выполни задачи сверху, пока есть ходы",
+  tipBombTitle: "Бомба!",
+  tipBombA: "Накрой бомбу линией — она обезвредится",
+  tipBombB: "Фитиль тикает каждый ход и по времени",
+  tipBombC: "Не успеешь — бабах: минус жизнь",
+  tipStoneTitle: "Камень",
+  tipStoneA: "Первая линия покрывает камень трещинами",
+  tipStoneB: "Вторая линия разбивает его вдребезги",
+  tipStoneC: "Взрыв бомбы или молоток сносят камень сразу",
+  // помощь: разделы с картинками
+  helpTitle: "Помощь",
+  helpBasicsTitle: "Как играть",
+  helpBasicsText:
+    "Перетаскивай фигуры из лотка на поле 8×8. Фигуры не вращаются — ставь как дают. Когда поставлена третья фигура, лоток наполняется заново.",
+  helpGoalsTitle: "Задачи уровня",
+  helpGoalsText:
+    "Сверху показаны задачи: линии, очки, сбор цвета или обезвреженные бомбы. Уровень пройден, когда закрыты все задачи. Ходы ограничены — следи за счётчиком слева.",
+  helpLinesTitle: "Линии и серии",
+  helpLinesText:
+    "Заполни ряд или столбец целиком — он взорвётся. Две линии сразу — двойная, три — тройная, четыре — мега удар! Взрывы подряд без промаха дают серию и множитель очков.",
+  helpBombsTitle: "Бомбы",
+  helpBombsText:
+    "Бомба появляется с фитилём — числом ходов до взрыва. Фитиль тикает каждым ходом и каждые несколько секунд простоя. Накрой бомбу линией — она обезвредитcя (+100). Взрыв отнимает жизнь и выжигает кратер 3×3. Жизней всего три.",
+  helpStonesTitle: "Камни",
+  helpStonesText:
+    "Серые камни занимают клетки, но не считаются заполненными. Первая линия, проходящая через камень, покрывает его трещинами. Вторая — разбивает вдребезги. Взрыв бомбы и молоток сносят камень сразу.",
+  helpCollectTitle: "Сбор цвета",
+  helpCollectText:
+    "В задачах может быть цвет: собери N блоков этого цвета из взорванных линий. Нужные блоки подсвечены рамкой на поле и выпадают чаще обычных.",
+  helpToolsTitle: "Инструменты",
+  helpToolsText:
+    "Молоток сносит любой блок (бомбу — обезвреживает). Микс заменяет все фигуры в лотке. +5 ходов добавляет ходы, когда их не хватает. Кончились — купи за монеты или пополнись рекламой.",
+  helpCoinsTitle: "Монеты и звёзды",
+  helpCoinsText:
+    "Монеты дают за уровни и звёзды, ежедневный вход и рекламу. Звёзды — за запас ходов без потерь жизней. Монеты трать на инструменты; за три звезды награда максимальная.",
+  // настройки
+  settingsTitle: "Настройки",
+  settingsSound: "Звук",
+  settingsLang: "Язык",
+  settingsLangAria: "Выбор языка",
   retryImprove: "Повторить",
   levelFailed: (n) => `Уровень ${n} не пройден`,
   loseMoves: "Ходы закончились!",
@@ -224,14 +368,90 @@ const en: Strings = {
   goalAria: (label, now, target) => `Level goal: ${label} ${now} of ${target}`,
   goalsAria: "Level goals",
   livesAria: (n) => `Lives: ${n} of 3`,
-  exitAria: "Back to the level map",
+  exitAria: "Back to level select",
   boardAria: "Game board: drag pieces from the tray onto the grid",
   levelComplete: (n) => `Level ${n} complete!`,
   coinsReward: (n) => `+${n} coins`,
   winStats: (score, movesLeft, defused) =>
     `Score: ${score} · Moves left: ${Math.max(0, movesLeft)} · Defused: ${defused}`,
   nextLevel: "Next level",
-  toMap: "Map",
+  toMap: "Select level",
+  // главное меню
+  menuAria: "Main menu",
+  menuContinue: "Continue",
+  menuContinueAll: "All levels complete!",
+  menuLevelSub: (n) => `Level ${n}`,
+  menuLevelSelect: "Select level",
+  menuHelp: "Help",
+  menuSettings: "Settings",
+  menuContinueAria: (n) => `Continue from level ${n}`,
+  menuLevelSelectAria: "Open the level map",
+  menuHelpAria: "Open help and game rules",
+  menuSettingsAria: "Open settings: sound and language",
+  backToMenuAria: "Back to the main menu",
+  menuFooterLevels: (done, total) => `Levels ${done}/${total}`,
+  menuFooterStars: (s, total) => `Stars ${s}/${total}`,
+  // подарок за ежедневный вход
+  giftTitle: "Daily gift",
+  giftClaim: (n) => `Claim +${n}`,
+  giftClaimed: "Claimed — come back tomorrow",
+  giftAria: (n) => `Claim the daily gift: ${n} coins`,
+  giftSectionAria: "Daily gift, coins and tools",
+  // модалка монет
+  coinsTitle: "Coins",
+  coinsTotal: "Your balance",
+  coinsHow: "Running low? Watch an ad to top up",
+  coinsOpenAria: "Coins: top up with an ad",
+  // панель инструмента (в уровне)
+  toolPanelAria: (label) => `Tool: ${label}`,
+  toolEmpty: "Out of stock!",
+  // краткие подсказки в игре
+  tipAria: "Quick explanation",
+  tipGotIt: "Got it",
+  tipPlay: "Play!",
+  tipStartTitle: "How to play",
+  tipStartA: "Drag pieces from the tray onto the board",
+  tipStartB: "Fill a full row or column — it blasts",
+  tipStartC: "Complete the goals above before moves run out",
+  tipBombTitle: "Bomb!",
+  tipBombA: "Cover a bomb with a line — it gets defused",
+  tipBombB: "The fuse ticks every move and over time",
+  tipBombC: "Too slow — boom: you lose a life",
+  tipStoneTitle: "Stone",
+  tipStoneA: "The first line cracks the stone all over",
+  tipStoneB: "The second line shatters it",
+  tipStoneC: "Bomb blasts and the hammer smash it at once",
+  // помощь: разделы с картинками
+  helpTitle: "Help",
+  helpBasicsTitle: "How to play",
+  helpBasicsText:
+    "Drag pieces from the tray onto the 8×8 board. Pieces don't rotate — place them as they come. Once the third piece is placed, the tray refills.",
+  helpGoalsTitle: "Level goals",
+  helpGoalsText:
+    "The goals sit at the top: lines, score, color collecting or defused bombs. The level is complete when every goal is closed. Moves are limited — watch the counter on the left.",
+  helpLinesTitle: "Lines and streaks",
+  helpLinesText:
+    "Fill a full row or column — it blasts. Two lines at once is a double, three a triple, four a mega blast! Back-to-back blasts build a streak with a score multiplier.",
+  helpBombsTitle: "Bombs",
+  helpBombsText:
+    "A bomb appears with a fuse — the number of moves before it blows. The fuse ticks on every move and every couple of idle seconds. Cover the bomb with a line — it defuses (+100). An explosion costs a life and burns a 3×3 crater. You only have three lives.",
+  helpStonesTitle: "Stones",
+  helpStonesText:
+    "Grey stones occupy cells but don't count as filled. The first line passing through a stone covers it in cracks. The second shatters it. Bomb blasts and the hammer destroy a stone at once.",
+  helpCollectTitle: "Color collecting",
+  helpCollectText:
+    "A goal may name a color: collect N blocks of that color from blasted lines. Those blocks glow with a border on the board and drop more often.",
+  helpToolsTitle: "Tools",
+  helpToolsText:
+    "The hammer smashes any block (and defuses bombs). Shuffle replaces all tray pieces. +5 moves adds moves when you run short. Out of tools — buy with coins or top up via an ad.",
+  helpCoinsTitle: "Coins and stars",
+  helpCoinsText:
+    "Coins come from levels, stars, daily visits and ads. Stars reward spare moves with no lives lost. Spend coins on tools; three stars pay the most.",
+  // настройки
+  settingsTitle: "Settings",
+  settingsSound: "Sound",
+  settingsLang: "Language",
+  settingsLangAria: "Language choice",
   retryImprove: "Retry",
   levelFailed: (n) => `Level ${n} failed`,
   loseMoves: "Out of moves!",

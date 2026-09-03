@@ -4,6 +4,9 @@ import { LEVEL_COUNT } from "./levels";
 
 export type BoosterKind = "hammer" | "shuffle" | "plus5";
 
+/** Краткие обучающие подсказки, уже показанные игроку (показываются один раз) */
+export type TipKind = "start" | "bomb" | "stone";
+
 export interface Progress {
   /** сколько уровней открыто (1..LEVEL_COUNT) */
   unlocked: number;
@@ -12,6 +15,10 @@ export interface Progress {
   coins: number;
   boosters: { hammer: number; shuffle: number; plus5: number };
   muted: boolean;
+  /** показанные один раз подсказки: старт / бомба / камень */
+  tips: Record<TipKind, boolean>;
+  /** день последнего забранного ежедневного подарка (локальный индекс дня, 0 — никогда) */
+  giftDay: number;
 }
 
 const KEY = "blockboom-progress-v1";
@@ -22,7 +29,35 @@ export const START_PROGRESS: Progress = {
   coins: 200,
   boosters: { hammer: 2, shuffle: 1, plus5: 1 },
   muted: false,
+  tips: { start: false, bomb: false, stone: false },
+  giftDay: 0,
 };
+
+/** Сколько монет даёт ежедневный подарок за вход */
+export const DAILY_GIFT = 50;
+
+/** Локальный индекс дня (устойчив к таймзоне устройства) */
+export function dayIndex(d: Date = new Date()): number {
+  return Math.floor((d.getTime() - d.getTimezoneOffset() * 60_000) / 86_400_000);
+}
+
+/** Доступен ли ежедневный подарок прямо сейчас */
+export function dailyGiftAvailable(p: Progress): boolean {
+  return p.giftDay < dayIndex();
+}
+
+/** Забрать ежедневный подарок; null — уже забран сегодня */
+export function claimDailyGift(p: Progress): Progress | null {
+  const today = dayIndex();
+  if (p.giftDay >= today) return null;
+  return { ...p, giftDay: today, coins: p.coins + DAILY_GIFT };
+}
+
+/** Отметить подсказку показанной (идемпотентно) */
+export function markTipSeen(p: Progress, kind: TipKind): Progress {
+  if (p.tips[kind]) return p;
+  return { ...p, tips: { ...p.tips, [kind]: true } };
+}
 
 export const PRICES: Record<BoosterKind, number> = {
   hammer: 100,
@@ -45,6 +80,12 @@ export function loadProgress(): Progress {
         plus5: clampInt(p.boosters?.plus5, 0, 99, START_PROGRESS.boosters.plus5),
       },
       muted: p.muted === true,
+      tips: {
+        start: p.tips?.start === true,
+        bomb: p.tips?.bomb === true,
+        stone: p.tips?.stone === true,
+      },
+      giftDay: clampInt(p.giftDay, 0, 2_000_000, 0),
     };
   } catch {
     return { ...START_PROGRESS };

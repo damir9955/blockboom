@@ -2,7 +2,7 @@
 
 // ── Реклама: демо-оверлей для веба + мост к нативному Yandex Mobile Ads SDK ──
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Bomb, Video, X } from "lucide-react";
 import { tr, type Lang } from "./i18n";
 
@@ -99,6 +99,67 @@ export async function showRewardedAd(blockId = "demo-rewarded-yandex"): Promise<
 
 /** Длительность демо-ролика, мс */
 const DEMO_MS = 5000;
+
+/** Хук рекламного потока: нативная реклама или демо-ролик + состояния UI.
+ *  onReward вызывается только за досмотренный ролик; busy=true, пока ролик занимает экран. */
+export function useRewardedAd(
+  reward: number,
+  onReward: (n: number) => void,
+): {
+  open: boolean;
+  loading: boolean;
+  failed: boolean;
+  start: () => void;
+  close: () => void;
+  claim: () => void;
+} {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const failTimer = useRef(0);
+  const busyRef = useRef(false);
+  const onRewardRef = useRef(onReward);
+  useEffect(() => {
+    onRewardRef.current = onReward;
+  }, [onReward]);
+
+  const close = useCallback(() => {
+    busyRef.current = false;
+    setOpen(false);
+    setLoading(false);
+  }, []);
+
+  const claim = useCallback(() => {
+    onRewardRef.current(reward);
+    close();
+  }, [reward, close]);
+
+  const start = useCallback(() => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setFailed(false);
+    setOpen(true);
+    if (isNativeYandexAds()) {
+      setLoading(true);
+      void showRewardedAd().then((res) => {
+        if (res === "rewarded") {
+          claim();
+        } else {
+          close();
+          if (res === "failed") {
+            setFailed(true);
+            window.clearTimeout(failTimer.current);
+            failTimer.current = window.setTimeout(() => setFailed(false), 3500);
+          }
+        }
+      });
+    }
+  }, [claim, close]);
+
+  useEffect(() => () => window.clearTimeout(failTimer.current), []);
+
+  return { open, loading, failed, start, close, claim };
+}
 
 interface AdOverlayProps {
   lang: Lang;
