@@ -19,6 +19,8 @@ export interface Progress {
   tips: Record<TipKind, boolean>;
   /** день последнего забранного ежедневного подарка (локальный индекс дня, 0 — никогда) */
   giftDay: number;
+  /** лучший результат в бесконечном режиме (0 — ещё не играли) */
+  bestEndless: number;
 }
 
 const KEY = "blockboom-progress-v1";
@@ -31,6 +33,7 @@ export const START_PROGRESS: Progress = {
   muted: false,
   tips: { start: false, bomb: false, stone: false },
   giftDay: 0,
+  bestEndless: 0,
 };
 
 /** Сколько монет даёт ежедневный подарок за вход */
@@ -51,6 +54,12 @@ export function claimDailyGift(p: Progress): Progress | null {
   const today = dayIndex();
   if (p.giftDay >= today) return null;
   return { ...p, giftDay: today, coins: p.coins + DAILY_GIFT };
+}
+
+/** Зафиксировать рекорд бесконечного режима; null — рекорд не побит */
+export function recordEndlessBest(p: Progress, score: number): Progress | null {
+  if (score <= p.bestEndless) return null;
+  return { ...p, bestEndless: score };
 }
 
 /** Отметить подсказку показанной (идемпотентно) */
@@ -86,6 +95,7 @@ export function loadProgress(): Progress {
         stone: p.tips?.stone === true,
       },
       giftDay: clampInt(p.giftDay, 0, 2_000_000, 0),
+      bestEndless: clampInt(p.bestEndless, 0, 10_000_000, 0),
     };
   } catch {
     return { ...START_PROGRESS };

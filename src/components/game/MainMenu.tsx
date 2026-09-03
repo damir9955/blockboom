@@ -10,6 +10,7 @@ import {
   Gift,
   Hammer,
   HelpCircle,
+  Infinity as InfinityIcon,
   Map as MapIcon,
   Play,
   Plus,
@@ -40,6 +41,7 @@ interface Props {
   lang: Lang;
   onContinue: (n: number) => void;
   onLevelSelect: () => void;
+  onEndless: () => void;
   onToggleMute: () => void;
   onSetLang: (l: Lang) => void;
   onAdReward: (n: number) => void;
@@ -63,6 +65,7 @@ export default function MainMenu({
   lang,
   onContinue,
   onLevelSelect,
+  onEndless,
   onToggleMute,
   onSetLang,
   onAdReward,
@@ -248,6 +251,20 @@ export default function MainMenu({
           >
             <MapIcon className="size-5 text-amber-300" aria-hidden="true" />
             {t.menuLevelSelect}
+          </button>
+
+          {/* Бесконечный режим: игра без остановки — задачи сменяют друг друга, монеты не начисляются */}
+          <button
+            type="button"
+            onClick={onEndless}
+            aria-label={t.menuEndlessAria}
+            className="flex flex-col items-center rounded-2xl border border-sky-400/25 bg-gradient-to-b from-sky-500/20 to-indigo-600/20 py-3.5 shadow-lg shadow-sky-950/40 transition active:scale-95 hover:from-sky-500/30"
+          >
+            <span className="flex items-center gap-2.5 text-lg font-black text-white">
+              <InfinityIcon className="size-6 text-sky-300" aria-hidden="true" />
+              {t.menuEndless}
+            </span>
+            <span className="mt-0.5 text-[11px] font-bold text-white/45">{t.menuEndlessSub(progress.bestEndless)}</span>
           </button>
 
           <div className="grid grid-cols-2 gap-3">

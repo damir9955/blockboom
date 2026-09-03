@@ -12,6 +12,9 @@ import {
   Gift,
   Hammer,
   Heart,
+  Infinity as InfinityIcon,
+  Map as MapIcon,
+  Mountain,
   Plus,
   Shuffle,
   Star,
@@ -167,6 +170,22 @@ export default function HelpModal({ lang, onClose }: HelpModalProps) {
       ),
     },
     {
+      title: t.helpModesTitle,
+      text: t.helpModesText,
+      pic: (
+        <div className="flex w-full flex-col gap-1.5">
+          <span className="flex items-center gap-1.5 rounded-lg border border-amber-400/25 bg-amber-400/10 px-2 py-1.5 text-[10px] font-black text-amber-300">
+            <MapIcon className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">{t.menuClassic}</span>
+          </span>
+          <span className="flex items-center gap-1.5 rounded-lg border border-sky-400/25 bg-sky-400/10 px-2 py-1.5 text-[10px] font-black text-sky-300">
+            <InfinityIcon className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">{t.menuEndless}</span>
+          </span>
+        </div>
+      ),
+    },
+    {
       title: t.helpGoalsTitle,
       text: t.helpGoalsText,
       pic: (
@@ -174,6 +193,7 @@ export default function HelpModal({ lang, onClose }: HelpModalProps) {
           {goalChip(<Flame className="size-3.5 shrink-0 text-orange-400" aria-hidden="true" />, t.goalLines, "0/3")}
           {goalChip(<Star className="size-3.5 shrink-0 text-amber-400" aria-hidden="true" />, t.goalScore, "0/600")}
           {goalChip(<Bomb className="size-3.5 shrink-0 text-rose-400" aria-hidden="true" />, t.goalDefuse, "0/2")}
+          {goalChip(<Mountain className="size-3.5 shrink-0 text-stone-300" aria-hidden="true" />, t.goalStones, "0/2")}
         </div>
       ),
     },

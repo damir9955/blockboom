@@ -103,11 +103,33 @@ export interface Strings {
   goalScore: string;
   goalDefuse: string;
   goalCollect: string;
+  goalStones: string;
   hintLines: (target: number, moves: number) => string;
   hintScore: (target: number, moves: number) => string;
   hintDefuse: (target: number) => string;
   hintCollect: (target: number, colorName: string) => string;
+  hintStones: (target: number) => string;
   colorNames: string[];
+  // режимы игры
+  menuClassic: string;
+  menuEndless: string;
+  menuEndlessAria: string;
+  menuEndlessSub: (best: number) => string;
+  endlessChip: string;
+  endlessBoardAria: string;
+  endlessOver: string;
+  endlessNewRecord: string;
+  endlessBest: string;
+  endlessAgain: string;
+  endlessToMenu: string;
+  endlessNoCoins: string;
+  /** сколько наборов задач выполнено за партию */
+  endlessSetsDone: (n: number) => string;
+  /** текст на канвасе при выполнении набора */
+  endlessSetDone: string;
+  /** подпись счётчика задач в HUD */
+  endlessTasksLabel: string;
+  difficultyAria: (d: number) => string;
   // canvas-тексты
   mega: string;
   triple: string;
@@ -167,6 +189,8 @@ export interface Strings {
   helpTitle: string;
   helpBasicsTitle: string;
   helpBasicsText: string;
+  helpModesTitle: string;
+  helpModesText: string;
   helpGoalsTitle: string;
   helpGoalsText: string;
   helpLinesTitle: string;
@@ -243,7 +267,7 @@ const ru: Strings = {
   // модалка монет
   coinsTitle: "Монеты",
   coinsTotal: "Твой баланс",
-  coinsHow: "Не хватает? Смотай рекламу — и баланс пополнится",
+  coinsHow: "Не хватает? Посмотри рекламу — и баланс пополнится",
   coinsOpenAria: "Монеты: пополнить за рекламу",
   // панель инструмента (в уровне)
   toolPanelAria: (label) => `Инструмент: ${label}`,
@@ -269,9 +293,12 @@ const ru: Strings = {
   helpBasicsTitle: "Как играть",
   helpBasicsText:
     "Перетаскивай фигуры из лотка на поле 8×8. Фигуры не вращаются — ставь как дают. Когда поставлена третья фигура, лоток наполняется заново.",
+  helpModesTitle: "Режимы игры",
+  helpModesText:
+    "Классика — 50 уровней с задачами, лимитом ходов и наградами. Бесконечный режим — игра без остановки: задачи появляются, выполняются и сразу сменяются новыми, поле и счёт не сбрасываются; сложность ходит волнами от 1 (легко) до 5 (сложно) и снова с 1, как в маджонгах; изредка попадаются наборы сразу из 4 задач. Поставленная фигура сразу заменяется новой. Проиграть можно от бомб или когда фигуры больше не помещаются. Монеты в этом режиме не начисляются.",
   helpGoalsTitle: "Задачи уровня",
   helpGoalsText:
-    "Сверху показаны задачи: линии, очки, сбор цвета или обезвреженные бомбы. Уровень пройден, когда закрыты все задачи. Ходы ограничены — следи за счётчиком слева.",
+    "Сверху показаны задачи: линии, очки, сбор цвета, обезвреженные бомбы или разбитые камни. Уровень пройден, когда закрыты все задачи. Ходы ограничены — следи за счётчиком слева.",
   helpLinesTitle: "Линии и серии",
   helpLinesText:
     "Заполни ряд или столбец целиком — он взорвётся. Две линии сразу — двойная, три — тройная, четыре — мега удар! Взрывы подряд без промаха дают серию и множитель очков.",
@@ -328,11 +355,32 @@ const ru: Strings = {
   goalScore: "Очки",
   goalDefuse: "Обезвредь",
   goalCollect: "Собери",
-  hintLines: (target, moves) => `Взорви ${target} линий за ${moves} ходов`,
-  hintScore: (target, moves) => `Набери ${target} очков за ${moves} ходов`,
+  goalStones: "Камни",
+  hintLines: (target, moves) =>
+    Number.isFinite(moves) ? `Взорви ${target} линий за ${moves} ходов` : `Взорви ${target} линий`,
+  hintScore: (target, moves) =>
+    Number.isFinite(moves) ? `Набери ${target} очков за ${moves} ходов` : `Набери ${target} очков`,
   hintDefuse: (target) => `Обезвредь ${target} бомб: закрывай их линиями`,
   hintCollect: (target, colorName) =>
     `Убери ${target} блоков «${colorName}» из взрываемых линий — они подсвечены рамкой и выпадают чаще`,
+  hintStones: (target) => `Разбей ${target} камней: первая линия дает трещины, вторая — разрушает`,
+  // режимы игры
+  menuClassic: "Классика",
+  menuEndless: "Бесконечный режим",
+  menuEndlessAria: "Играть в бесконечный режим: задачи сменяют друг друга без остановки",
+  menuEndlessSub: (best) => (best > 0 ? `Рекорд: ${best}` : "Задачи без остановки"),
+  endlessChip: "Бесконечный режим",
+  endlessBoardAria: "Бесконечный режим: перетаскивай фигуры из лотка на сетку",
+  endlessOver: "Игра окончена",
+  endlessNewRecord: "Новый рекорд!",
+  endlessBest: "Рекорд",
+  endlessAgain: "Ещё раз",
+  endlessToMenu: "В меню",
+  endlessNoCoins: "Монеты в этом режиме не начисляются",
+  endlessSetsDone: (n) => `Задач выполнено: ${n}`,
+  endlessSetDone: "ЗАДАЧИ ВЫПОЛНЕНЫ!",
+  endlessTasksLabel: "Задачи",
+  difficultyAria: (d) => `Сложность ${d} из 5`,
   colorNames: ["Коралл", "Янтарь", "Изумруд", "Роза", "Аметист", "Бирюза", "Апельсин", "Лайм"],
   mega: "МЕГА УДАР!",
   triple: "ТРОЙНАЯ!",
@@ -426,9 +474,12 @@ const en: Strings = {
   helpBasicsTitle: "How to play",
   helpBasicsText:
     "Drag pieces from the tray onto the 8×8 board. Pieces don't rotate — place them as they come. Once the third piece is placed, the tray refills.",
+  helpModesTitle: "Game modes",
+  helpModesText:
+    "Classic — 50 levels with goals, a move limit and rewards. Endless mode — non-stop play: goals appear, get completed and are instantly replaced with new ones, while the board and score carry over; the difficulty rides waves from 1 (easy) to 5 (hard) and back to 1, like in mahjong solitaire; rare sets carry 4 goals at once. A placed piece is replaced with a new one right away. You lose to bombs or when pieces no longer fit. No coins are earned in endless mode.",
   helpGoalsTitle: "Level goals",
   helpGoalsText:
-    "The goals sit at the top: lines, score, color collecting or defused bombs. The level is complete when every goal is closed. Moves are limited — watch the counter on the left.",
+    "The goals sit at the top: lines, score, color collecting, defused bombs or smashed stones. The level is complete when every goal is closed. Moves are limited — watch the counter on the left.",
   helpLinesTitle: "Lines and streaks",
   helpLinesText:
     "Fill a full row or column — it blasts. Two lines at once is a double, three a triple, four a mega blast! Back-to-back blasts build a streak with a score multiplier.",
@@ -485,11 +536,32 @@ const en: Strings = {
   goalScore: "Score",
   goalDefuse: "Defuse",
   goalCollect: "Collect",
-  hintLines: (target, moves) => `Blast ${target} lines in ${moves} moves`,
-  hintScore: (target, moves) => `Score ${target} points in ${moves} moves`,
+  goalStones: "Stones",
+  hintLines: (target, moves) =>
+    Number.isFinite(moves) ? `Blast ${target} lines in ${moves} moves` : `Blast ${target} lines`,
+  hintScore: (target, moves) =>
+    Number.isFinite(moves) ? `Score ${target} points in ${moves} moves` : `Score ${target} points`,
   hintDefuse: (target) => `Defuse ${target} bombs: clear them with full lines`,
   hintCollect: (target, colorName) =>
     `Clear ${target} "${colorName}" blocks from blasted lines — they glow with a border and drop more often`,
+  hintStones: (target) => `Smash ${target} stones: the first line cracks them, the second shatters them`,
+  // режимы игры
+  menuClassic: "Classic",
+  menuEndless: "Endless mode",
+  menuEndlessAria: "Play the endless mode: goals replace each other non-stop",
+  menuEndlessSub: (best) => (best > 0 ? `Best: ${best}` : "Non-stop goals"),
+  endlessChip: "Endless mode",
+  endlessBoardAria: "Endless mode: drag pieces from the tray onto the grid",
+  endlessOver: "Game over",
+  endlessNewRecord: "New record!",
+  endlessBest: "Best",
+  endlessAgain: "Play again",
+  endlessToMenu: "To menu",
+  endlessNoCoins: "No coins are earned in this mode",
+  endlessSetsDone: (n) => `Sets completed: ${n}`,
+  endlessSetDone: "GOALS COMPLETE!",
+  endlessTasksLabel: "Sets",
+  difficultyAria: (d) => `Difficulty ${d} of 5`,
   colorNames: ["Coral", "Amber", "Emerald", "Rose", "Amethyst", "Turquoise", "Orange", "Lime"],
   mega: "MEGA BLAST!",
   triple: "TRIPLE!",

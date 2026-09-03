@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import GameScreen, { type LevelResult } from "@/components/game/GameScreen";
+import GameScreen, { type GameMode, type LevelResult } from "@/components/game/GameScreen";
 import MainMenu from "@/components/game/MainMenu";
 import MapScreen from "@/components/game/MapScreen";
 import { LEVELS } from "@/components/game/levels";
@@ -14,6 +14,7 @@ import {
   loadProgress,
   markTipSeen,
   PRICES,
+  recordEndlessBest,
   saveProgress,
   spendBooster,
   START_PROGRESS,
@@ -29,6 +30,7 @@ type View = "menu" | "map" | "game";
 
 export default function Home() {
   const [view, setView] = useState<View>("menu");
+  const [mode, setMode] = useState<GameMode>("classic");
   const [levelN, setLevelN] = useState(1);
   const [gameKey, setGameKey] = useState(0);
   const [progress, setProgress] = useState<Progress>({ ...START_PROGRESS });
@@ -61,7 +63,15 @@ export default function Home() {
   };
 
   const startLevel = (n: number) => {
+    setMode("classic");
     setLevelN(n);
+    setGameKey((k) => k + 1);
+    setView("game");
+  };
+
+  /** Бесконечный режим: игра без остановки — задачи сменяют друг друга, монеты не начисляются */
+  const startEndless = () => {
+    setMode("endless");
     setGameKey((k) => k + 1);
     setView("game");
   };
@@ -120,6 +130,11 @@ export default function Home() {
     return ok;
   };
 
+  /** Зафиксировать рекорд бесконечного режима */
+  const handleEndlessBest = (score: number) => {
+    applyProgress((p) => recordEndlessBest(p, score));
+  };
+
   /** Отметить краткую подсказку показанной (показываем один раз) */
   const handleTipSeen = (kind: TipKind) => {
     applyProgress((p) => markTipSeen(p, kind));
@@ -134,7 +149,8 @@ export default function Home() {
     setLang(l);
   };
 
-  const level = LEVELS[levelN - 1];
+  // в бесконечном режиме уровень не используется: наборы задач генерируются внутри игры
+  const level = mode === "endless" ? null : LEVELS[levelN - 1];
 
   return (
     <>
@@ -144,6 +160,7 @@ export default function Home() {
           lang={lang}
           onContinue={startLevel}
           onLevelSelect={() => setView("map")}
+          onEndless={startEndless}
           onToggleMute={handleToggleMute}
           onSetLang={handleSetLang}
           onAdReward={handleAdReward}
@@ -163,9 +180,11 @@ export default function Home() {
         />
       ) : (
         <GameScreen
-          key={`${levelN}-${gameKey}`}
+          key={`${mode}-${levelN}-${gameKey}`}
           level={level}
-          firstClear={firstClearOf(progress, levelN)}
+          mode={mode}
+          best={progress.bestEndless}
+          firstClear={mode === "endless" ? false : firstClearOf(progress, levelN)}
           boosters={progress.boosters}
           coins={progress.coins}
           muted={progress.muted}
@@ -178,7 +197,8 @@ export default function Home() {
           adReward={AD_REWARD}
           onTipSeen={handleTipSeen}
           onLevelEnd={handleLevelEnd}
-          onExit={handleExit}
+          onExit={mode === "endless" ? handleMenu : handleExit}
+          onBestScore={handleEndlessBest}
         />
       )}
     </>
