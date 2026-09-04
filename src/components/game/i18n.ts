@@ -64,6 +64,76 @@ export interface Strings {
   nextLevel: string;
   toMap: string;
   retryImprove: string;
+  // главное меню
+  menuAria: string;
+  menuContinue: string;
+  menuContinueAll: string;
+  menuLevelSub: (n: number) => string;
+  menuLevelSelect: string;
+  menuHelp: string;
+  menuSettings: string;
+  menuContinueAria: (n: number) => string;
+  menuLevelSelectAria: string;
+  menuHelpAria: string;
+  menuSettingsAria: string;
+  backToMenuAria: string;
+  menuFooterLevels: (n: number, total: number) => string;
+  menuFooterStars: (n: number, total: number) => string;
+  // ежедневный подарок
+  giftTitle: string;
+  giftClaim: (n: number) => string;
+  giftClaimed: string;
+  giftAria: (n: number) => string;
+  giftSectionAria: string;
+  // панель монет
+  coinsTitle: string;
+  coinsTotal: string;
+  coinsHow: string;
+  coinsOpenAria: string;
+  // инструменты
+  toolPanelAria: (name: string) => string;
+  toolEmpty: string;
+  // подсказки-туториал
+  tipAria: string;
+  tipGotIt: string;
+  tipPlay: string;
+  tipStartTitle: string;
+  tipStartA: string;
+  tipStartB: string;
+  tipStartC: string;
+  tipBombTitle: string;
+  tipBombA: string;
+  tipBombB: string;
+  tipBombC: string;
+  tipStoneTitle: string;
+  tipStoneA: string;
+  tipStoneB: string;
+  tipStoneC: string;
+  // справка
+  helpTitle: string;
+  helpBasicsTitle: string;
+  helpBasicsText: string;
+  helpModesTitle: string;
+  helpModesText: string;
+  helpGoalsTitle: string;
+  helpGoalsText: string;
+  helpLinesTitle: string;
+  helpLinesText: string;
+  helpBombsTitle: string;
+  helpBombsText: string;
+  helpStonesTitle: string;
+  helpStonesText: string;
+  helpCollectTitle: string;
+  helpCollectText: string;
+  helpToolsTitle: string;
+  helpToolsText: string;
+  helpCoinsTitle: string;
+  helpCoinsText: string;
+  // настройки
+  settingsTitle: string;
+  settingsSound: string;
+  settingsLang: string;
+  settingsLangAria: string;
   // оверлей поражения
   levelFailed: (n: number) => string;
   loseMoves: string;
@@ -110,7 +180,7 @@ export interface Strings {
   hintCollect: (target: number, colorName: string) => string;
   hintStones: (target: number) => string;
   colorNames: string[];
-  // режимы игры
+  // бесконечный режим
   menuClassic: string;
   menuEndless: string;
   menuEndlessAria: string;
@@ -123,11 +193,8 @@ export interface Strings {
   endlessAgain: string;
   endlessToMenu: string;
   endlessNoCoins: string;
-  /** сколько наборов задач выполнено за партию */
   endlessSetsDone: (n: number) => string;
-  /** текст на канвасе при выполнении набора */
   endlessSetDone: string;
-  /** подпись счётчика задач в HUD */
   endlessTasksLabel: string;
   difficultyAria: (d: number) => string;
   // canvas-тексты
@@ -140,76 +207,6 @@ export interface Strings {
   defuse100: string;
   plus5Text: string;
   minusLife: string;
-  // главное меню
-  menuAria: string;
-  menuContinue: string;
-  menuContinueAll: string;
-  menuLevelSub: (n: number) => string;
-  menuLevelSelect: string;
-  menuHelp: string;
-  menuSettings: string;
-  menuContinueAria: (n: number) => string;
-  menuLevelSelectAria: string;
-  menuHelpAria: string;
-  menuSettingsAria: string;
-  backToMenuAria: string;
-  menuFooterLevels: (done: number, total: number) => string;
-  menuFooterStars: (s: number, total: number) => string;
-  // подарок за ежедневный вход
-  giftTitle: string;
-  giftClaim: (n: number) => string;
-  giftClaimed: string;
-  giftAria: (n: number) => string;
-  giftSectionAria: string;
-  // модалка монет
-  coinsTitle: string;
-  coinsTotal: string;
-  coinsHow: string;
-  coinsOpenAria: string;
-  // панель инструмента (в уровне)
-  toolPanelAria: (label: string) => string;
-  toolEmpty: string;
-  // краткие подсказки в игре
-  tipAria: string;
-  tipGotIt: string;
-  tipPlay: string;
-  tipStartTitle: string;
-  tipStartA: string;
-  tipStartB: string;
-  tipStartC: string;
-  tipBombTitle: string;
-  tipBombA: string;
-  tipBombB: string;
-  tipBombC: string;
-  tipStoneTitle: string;
-  tipStoneA: string;
-  tipStoneB: string;
-  tipStoneC: string;
-  // помощь: разделы с картинками
-  helpTitle: string;
-  helpBasicsTitle: string;
-  helpBasicsText: string;
-  helpModesTitle: string;
-  helpModesText: string;
-  helpGoalsTitle: string;
-  helpGoalsText: string;
-  helpLinesTitle: string;
-  helpLinesText: string;
-  helpBombsTitle: string;
-  helpBombsText: string;
-  helpStonesTitle: string;
-  helpStonesText: string;
-  helpCollectTitle: string;
-  helpCollectText: string;
-  helpToolsTitle: string;
-  helpToolsText: string;
-  helpCoinsTitle: string;
-  helpCoinsText: string;
-  // настройки
-  settingsTitle: string;
-  settingsSound: string;
-  settingsLang: string;
-  settingsLangAria: string;
 }
 
 const ru: Strings = {
@@ -243,7 +240,7 @@ const ru: Strings = {
     `Очки: ${score} · Ходов осталось: ${Math.max(0, movesLeft)} · Обезврежено: ${defused}`,
   nextLevel: "Следующий уровень",
   toMap: "Выбрать уровень",
-  // главное меню
+  retryImprove: "Повторить",
   menuAria: "Главное меню",
   menuContinue: "Продолжить",
   menuContinueAll: "Все уровни пройдены!",
@@ -256,23 +253,19 @@ const ru: Strings = {
   menuHelpAria: "Открыть помощь и правила игры",
   menuSettingsAria: "Открыть настройки: звук и язык",
   backToMenuAria: "Вернуться в главное меню",
-  menuFooterLevels: (done, total) => `Уровни ${done}/${total}`,
-  menuFooterStars: (s, total) => `Звёзды ${s}/${total}`,
-  // подарок за ежедневный вход
+  menuFooterLevels: (n, total) => `Уровни ${n}/${total}`,
+  menuFooterStars: (n, total) => `Звёзды ${n}/${total}`,
   giftTitle: "Ежедневный подарок",
   giftClaim: (n) => `Забрать +${n}`,
   giftClaimed: "Получен — приходи завтра",
   giftAria: (n) => `Забрать ежедневный подарок: ${n} монет`,
   giftSectionAria: "Подарок за вход, монеты и инструменты",
-  // модалка монет
   coinsTitle: "Монеты",
   coinsTotal: "Твой баланс",
   coinsHow: "Не хватает? Посмотри рекламу — и баланс пополнится",
   coinsOpenAria: "Монеты: пополнить за рекламу",
-  // панель инструмента (в уровне)
-  toolPanelAria: (label) => `Инструмент: ${label}`,
+  toolPanelAria: (name) => `Инструмент: ${name}`,
   toolEmpty: "Закончился!",
-  // краткие подсказки в игре
   tipAria: "Краткое объяснение",
   tipGotIt: "Понятно",
   tipPlay: "Играть!",
@@ -288,7 +281,6 @@ const ru: Strings = {
   tipStoneA: "Первая линия покрывает камень трещинами",
   tipStoneB: "Вторая линия разбивает его вдребезги",
   tipStoneC: "Взрыв бомбы или молоток сносят камень сразу",
-  // помощь: разделы с картинками
   helpTitle: "Помощь",
   helpBasicsTitle: "Как играть",
   helpBasicsText:
@@ -313,16 +305,14 @@ const ru: Strings = {
     "В задачах может быть цвет: собери N блоков этого цвета из взорванных линий. Нужные блоки подсвечены рамкой на поле и выпадают чаще обычных.",
   helpToolsTitle: "Инструменты",
   helpToolsText:
-    "Молоток сносит любой блок (бомбу — обезвреживает). Микс заменяет все фигуры в лотке. +5 ходов добавляет ходы, когда их не хватает. Кончились — купи за монеты или пополнись рекламой.",
+    "Молоток сносит любой блок (бомбу — обезвреживает). Микс заменяет все фигуры в лотке. +5 ходов добавляет ходы, когда их не хватает. Кончились — купи за монеты или пополни рекламой.",
   helpCoinsTitle: "Монеты и звёзды",
   helpCoinsText:
     "Монеты дают за уровни и звёзды, ежедневный вход и рекламу. Звёзды — за запас ходов без потерь жизней. Монеты трать на инструменты; за три звезды награда максимальная.",
-  // настройки
   settingsTitle: "Настройки",
   settingsSound: "Звук",
   settingsLang: "Язык",
   settingsLangAria: "Выбор языка",
-  retryImprove: "Повторить",
   levelFailed: (n) => `Уровень ${n} не пройден`,
   loseMoves: "Ходы закончились!",
   loseBombs: "Бабах! Бомбы одолели",
@@ -364,7 +354,6 @@ const ru: Strings = {
   hintCollect: (target, colorName) =>
     `Убери ${target} блоков «${colorName}» из взрываемых линий — они подсвечены рамкой и выпадают чаще`,
   hintStones: (target) => `Разбей ${target} камней: первая линия дает трещины, вторая — разрушает`,
-  // режимы игры
   menuClassic: "Классика",
   menuEndless: "Бесконечный режим",
   menuEndlessAria: "Играть в бесконечный режим: задачи сменяют друг друга без остановки",
@@ -424,7 +413,7 @@ const en: Strings = {
     `Score: ${score} · Moves left: ${Math.max(0, movesLeft)} · Defused: ${defused}`,
   nextLevel: "Next level",
   toMap: "Select level",
-  // главное меню
+  retryImprove: "Retry",
   menuAria: "Main menu",
   menuContinue: "Continue",
   menuContinueAll: "All levels complete!",
@@ -437,23 +426,19 @@ const en: Strings = {
   menuHelpAria: "Open help and game rules",
   menuSettingsAria: "Open settings: sound and language",
   backToMenuAria: "Back to the main menu",
-  menuFooterLevels: (done, total) => `Levels ${done}/${total}`,
-  menuFooterStars: (s, total) => `Stars ${s}/${total}`,
-  // подарок за ежедневный вход
+  menuFooterLevels: (n, total) => `Levels ${n}/${total}`,
+  menuFooterStars: (n, total) => `Stars ${n}/${total}`,
   giftTitle: "Daily gift",
   giftClaim: (n) => `Claim +${n}`,
   giftClaimed: "Claimed — come back tomorrow",
   giftAria: (n) => `Claim the daily gift: ${n} coins`,
   giftSectionAria: "Daily gift, coins and tools",
-  // модалка монет
   coinsTitle: "Coins",
   coinsTotal: "Your balance",
   coinsHow: "Running low? Watch an ad to top up",
   coinsOpenAria: "Coins: top up with an ad",
-  // панель инструмента (в уровне)
-  toolPanelAria: (label) => `Tool: ${label}`,
+  toolPanelAria: (name) => `Tool: ${name}`,
   toolEmpty: "Out of stock!",
-  // краткие подсказки в игре
   tipAria: "Quick explanation",
   tipGotIt: "Got it",
   tipPlay: "Play!",
@@ -469,7 +454,6 @@ const en: Strings = {
   tipStoneA: "The first line cracks the stone all over",
   tipStoneB: "The second line shatters it",
   tipStoneC: "Bomb blasts and the hammer smash it at once",
-  // помощь: разделы с картинками
   helpTitle: "Help",
   helpBasicsTitle: "How to play",
   helpBasicsText:
@@ -498,12 +482,10 @@ const en: Strings = {
   helpCoinsTitle: "Coins and stars",
   helpCoinsText:
     "Coins come from levels, stars, daily visits and ads. Stars reward spare moves with no lives lost. Spend coins on tools; three stars pay the most.",
-  // настройки
   settingsTitle: "Settings",
   settingsSound: "Sound",
   settingsLang: "Language",
   settingsLangAria: "Language choice",
-  retryImprove: "Retry",
   levelFailed: (n) => `Level ${n} failed`,
   loseMoves: "Out of moves!",
   loseBombs: "Boom! The bombs won",
@@ -545,7 +527,6 @@ const en: Strings = {
   hintCollect: (target, colorName) =>
     `Clear ${target} "${colorName}" blocks from blasted lines — they glow with a border and drop more often`,
   hintStones: (target) => `Smash ${target} stones: the first line cracks them, the second shatters them`,
-  // режимы игры
   menuClassic: "Classic",
   menuEndless: "Endless mode",
   menuEndlessAria: "Play the endless mode: goals replace each other non-stop",

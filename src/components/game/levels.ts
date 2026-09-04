@@ -1,4 +1,5 @@
 // ── Уровни БЛОК БУМ: несколько целей, лимит ходов, камни, звёзды, награды ────
+// + бесконечный режим: «катящиеся» наборы задач без остановки
 
 import { tr, type Lang } from "./i18n";
 
@@ -12,7 +13,7 @@ export interface GoalDef {
 
 export interface LevelDef {
   n: number;
-  /** 1-3 одновременных целей уровня */
+  /** 1-3 одновременных цели уровня */
   goals: GoalDef[];
   moves: number;
   diff: number;
@@ -54,6 +55,7 @@ function baseTarget(n: number, type: GoalType): number {
 function minTarget(type: GoalType): number {
   switch (type) {
     case "lines":
+    case "stones":
       return 2;
     case "score":
       return 220;
@@ -61,8 +63,6 @@ function minTarget(type: GoalType): number {
       return 7;
     case "defuse":
       return 1;
-    case "stones":
-      return 2;
   }
 }
 
@@ -73,7 +73,6 @@ function goalTargetFor(n: number, type: GoalType, goalCount: number): number {
   return Math.max(minTarget(type), Math.round(baseTarget(n, type) * f));
 }
 
-/** Типы, которые используются как ДОПОЛНИТЕЛЬНЫЕ цели (камни — только основная) */
 const GOAL_TYPES: GoalType[] = ["lines", "score", "collect", "defuse"];
 
 function buildLevels(): LevelDef[] {
@@ -81,9 +80,16 @@ function buildLevels(): LevelDef[] {
   for (let n = 1; n <= LEVEL_COUNT; n++) {
     const wave = Math.floor((n - 1) / 5);
     const cycle = (n - 1) % 5;
-    // камни — основная цель на каждом 5-м уровне с 15-го (уровни 15, 20, 25, ...)
     const primary: GoalType =
-      cycle === 1 ? "score" : cycle === 2 ? "collect" : cycle === 3 ? "defuse" : cycle === 4 && n >= 15 ? "stones" : "lines";
+      cycle === 1
+        ? "score"
+        : cycle === 2
+          ? "collect"
+          : cycle === 3
+            ? "defuse"
+            : cycle === 4 && n >= 15
+              ? "stones"
+              : "lines";
     const goalCount = n < 15 ? 1 : n < 30 ? 2 : n % 5 === 0 ? 3 : 2;
     const types: GoalType[] = [primary];
     if (goalCount > 1) {
@@ -99,13 +105,11 @@ function buildLevels(): LevelDef[] {
     const diff = clamp(0.05 + 0.016 * n, 0, 0.78);
     const bombsFrom = n <= 2 ? Infinity : Math.max(3, 12 - wave);
     const bombEvery = n <= 2 ? Infinity : Math.max(5, 9 - wave) + (hasScore ? 1 : 0);
-    // камни появляются с 13-го уровня и gradually размножаются;
-    // на уровнях с целью «камни» — на один больше (запас), цель = все кроме одного
-    const baseStones = n < 13 || !Number.isFinite(bombsFrom) ? 0 : Math.min(5, 2 + Math.floor((n - 13) / 7));
-    const stones = primary === "stones" ? Math.min(6, baseStones + 1) : baseStones;
-    if (primary === "stones") {
-      goals[0] = { type: "stones", target: Math.max(2, stones - 1) };
-    }
+    // камни появляются с 13-го уровня и постепенно размножаются;
+    // на уровнях с целью «камни» их на одну больше, чем требуется разбить
+    const base = n < 13 || !Number.isFinite(bombsFrom) ? 0 : Math.min(5, 2 + Math.floor((n - 13) / 7));
+    const stones = primary === "stones" ? Math.min(6, base + 1) : base;
+    if (primary === "stones") goals[0] = { type: "stones", target: Math.max(2, stones - 1) };
     out.push({ n, goals, moves, diff, bombsFrom, bombEvery, pieceBombs: n >= 9, stones });
   }
   // Ручная калибровка первых уровней (туториальная плавность)
@@ -128,80 +132,82 @@ function buildLevels(): LevelDef[] {
 
 export const LEVELS: LevelDef[] = buildLevels();
 
-/** Бесконечный режим: игра без остановки. Задачи появляются, выполняются —
- *  и сразу сменяются новыми, поле и счёт не сбрасываются. Сложность циклится
- *  1→5 и снова с 1 (как в маджонгах): 1 — легко, 5 — сложно.
- *  Смерть: бомбы (жизни) или тупик (фигуры не помещаются). Монеты не начисляются. */
-export function endlessDifficultyOf(n: number): number {
-  return ((n - 1) % 5) + 1;
-}
+// ── Бесконечный режим: наборы задач сменяют друг друга без остановки ─────────
 
-/** Набор задач бесконечного режима (n — номер набора, 1-based) */
-export interface EndlessGoalSet {
+export interface EndlessSetDef {
+  /** номер набора (растёт с каждым выполненным) */
   n: number;
+  /** 1-4 задачи набора */
   goals: GoalDef[];
-  /** сложность 1..5 */
+  /** волна сложности 1..5 — как в маджонгах: 1→5 и снова с 1 */
   difficulty: number;
-  /** фигуры в лотке могут нести бомбы (D ≥ 3) */
+  /** фигуры в лотке могут нести бомбы (с волны 3) */
   pieceBombs: boolean;
-  /** ходов между спавнами полевых бомб (Infinity — на лёгкой волне не спавнят) */
+  /** ходов между появлениями полевых бомб (Infinity = волна без бомб) */
   bombEvery: number;
   /** сложность генерации фигур (крупные чаще) */
   shapeDiff: number;
 }
 
-export function generateEndlessGoalSet(n: number): EndlessGoalSet {
-  const D = endlessDifficultyOf(n);
+/** Набор задач для бесконечного режима № n. Сложность ходит волнами 1..5 по кругу;
+ *  изредка (№ % 10 == 5) набор состоит сразу из 4 задач. */
+export function generateEndlessSet(n: number): EndlessSetDef {
+  const difficulty = ((n - 1) % 5) + 1;
   const cycle = Math.floor((n - 1) / 5);
-  // основная задача волны: свой тип на каждую сложность — ровно один цикл
   const primary: GoalType =
-    D === 2 ? "score" : D === 3 ? "collect" : D === 4 ? "defuse" : D === 5 ? "stones" : "lines";
-  // задач 1 на лёгкой волне, 2-3 на средних; 4 — редко, чтобы игрок не уставал
+    difficulty === 2
+      ? "score"
+      : difficulty === 3
+        ? "collect"
+        : difficulty === 4
+          ? "defuse"
+          : difficulty === 5
+            ? "stones"
+            : "lines";
   const goalCount =
-    D === 1
+    difficulty === 1
       ? 1
-      : D === 2
+      : difficulty === 2
         ? n % 2 === 0
           ? 2
           : 1
-        : D === 3
+        : difficulty === 3
           ? 2
-          : D === 4
+          : difficulty === 4
             ? n % 3 === 0
               ? 3
               : 2
             : n > 5 && n % 10 === 5
               ? 4
               : 3;
-  // эквивалент классического уровня для калибровки величины целей + мягкий рост по циклам (кап)
-  const eq = D * 5 - 2 + Math.min(8, cycle * 2);
+  // «номер уровня», эквивалентный по сложности (растёт с каждым кругом волн)
+  const levelEquiv = 5 * difficulty - 2 + Math.min(8, 2 * cycle);
   const types: GoalType[] = [primary];
   if (goalCount > 1) {
     const others = GOAL_TYPES.filter((g) => g !== primary);
     for (let k = 0; k < goalCount - 1; k++) types.push(others[(n + k) % others.length]);
   }
   const goals: GoalDef[] = types.map((type) => {
-    const target = goalTargetFor(eq, type, goalCount);
+    const target = goalTargetFor(levelEquiv, type, goalCount);
     return type === "collect" ? { type, target, color: 1 + ((3 * n) % 8) } : { type, target };
   });
   if (primary === "stones") goals[0] = { type: "stones", target: 3 };
   else if (primary === "defuse") goals[0] = { type: "defuse", target: goalCount >= 3 ? 2 : 3 };
-  const set: EndlessGoalSet = {
+  const set: EndlessSetDef = {
     n,
     goals,
-    difficulty: D,
-    pieceBombs: D >= 3,
-    bombEvery: D <= 1 ? Infinity : Math.max(4, 9 - D),
-    shapeDiff: Math.min(0.6, 0.08 + 0.09 * (D - 1) + 0.008 * Math.min(cycle, 12)),
+    difficulty,
+    pieceBombs: difficulty >= 3,
+    bombEvery: difficulty <= 1 ? Infinity : Math.max(4, 9 - difficulty),
+    shapeDiff: Math.min(0.6, 0.08 + 0.09 * (difficulty - 1) + 0.008 * Math.min(cycle, 12)),
   };
-  // задачи с «обезвредь» требуют щедрых бомб
+  // на наборах с задачей «обезвредь» бомбы обязаны появляться
   if (set.goals.some((g) => g.type === "defuse")) set.bombEvery = Math.min(set.bombEvery, 4);
   return set;
 }
 
-/** LevelDef-представление набора задач (для HUD/подсказок/целей);
- *  ходы = Infinity: лимита ходов нет — подсказки не называют число ходов */
-export function goalSetAsLevel(set: EndlessGoalSet): LevelDef {
+/** Снимок набора в форме «уровня» — для общих проверок целей и HUD */
+export function endlessSnapshot(set: EndlessSetDef): LevelDef {
   return {
     n: set.n,
     goals: set.goals,
@@ -219,7 +225,7 @@ export interface GoalStats {
   defused: number;
   collected: number;
   score: number;
-  /** сколько камней разбито (для цели «камни») */
+  /** разбито камней (для цели «камни») */
   stones: number;
 }
 

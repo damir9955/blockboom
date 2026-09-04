@@ -5,15 +5,14 @@ import { ArrowLeft, Bomb, Coins, Hammer, Lock, Play, Plus, Shuffle, Star } from 
 import { tr, type Lang } from "./i18n";
 import { LEVELS, LEVEL_COUNT, levelHint } from "./levels";
 import { PRICES, totalStars, type BoosterKind, type Progress } from "./progress";
+import CoinsPanel from "./CoinsPanel";
 import BuyConfirm from "./BuyConfirm";
-import CoinsModal from "./CoinsModal";
 
 interface Props {
   progress: Progress;
   lang: Lang;
   onStart: (n: number) => void;
   onBuy: (kind: BoosterKind) => boolean;
-  /** вернуться в главное меню */
   onMenu: () => void;
   onAdReward: (n: number) => void;
   adReward: number;
@@ -76,7 +75,7 @@ export default function MapScreen({ progress, lang, onStart, onBuy, onMenu, onAd
   return (
     <div className="flex h-[100dvh] w-full flex-col items-center overflow-hidden bg-[#131118] bg-gradient-to-b from-[#1d1828] via-[#141219] to-[#0f0e14] text-white select-none">
       <main className="flex w-full max-w-[420px] flex-1 flex-col overflow-hidden px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-[max(env(safe-area-inset-top),12px)]">
-        {/* Шапка: назад в меню, лого, монеты */}
+        {/* Шапка */}
         <header className="flex items-center justify-between gap-3 pb-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <button
@@ -85,7 +84,7 @@ export default function MapScreen({ progress, lang, onStart, onBuy, onMenu, onAd
               aria-label={t.backToMenuAria}
               className="shrink-0 rounded-xl border border-white/10 bg-white/5 p-2.5 text-white/70 transition active:scale-90 hover:bg-white/10"
             >
-              <ArrowLeft className="size-4" />
+              <ArrowLeft className="size-4" aria-hidden="true" />
             </button>
             <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 shadow-lg shadow-orange-950/40">
               <Bomb className="size-5 text-white" aria-hidden="true" />
@@ -102,10 +101,10 @@ export default function MapScreen({ progress, lang, onStart, onBuy, onMenu, onAd
             type="button"
             onClick={() => setCoinsOpen(true)}
             aria-label={t.coinsOpenAria}
-            className="flex shrink-0 items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-400/10 px-3.5 py-1.5 text-sm font-black text-amber-300 tabular-nums transition active:scale-90 hover:bg-amber-400/20"
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-sm font-black text-amber-300 tabular-nums transition active:scale-90 hover:bg-amber-400/20"
           >
             <Coins className="size-4" aria-hidden="true" />
-            <span key={progress.coins} className="score-pop">{progress.coins}</span>
+            {progress.coins}
           </button>
         </header>
 
@@ -194,7 +193,7 @@ export default function MapScreen({ progress, lang, onStart, onBuy, onMenu, onAd
           </div>
         </div>
 
-        {/* Магазин бустеров (пополнение монет — по тапу на монеты в шапке) */}
+        {/* Магазин бустеров */}
         <section className="mt-3" aria-label={t.boosterShopAria}>
           <div className="grid grid-cols-3 gap-2">
             {boosters.map(({ kind, label, Icon, price, count, tone }) => {
@@ -204,7 +203,6 @@ export default function MapScreen({ progress, lang, onStart, onBuy, onMenu, onAd
                   key={kind}
                   type="button"
                   onClick={() => (afford ? setPendingKind(kind) : setCoinsOpen(true))}
-                  aria-disabled={!afford}
                   aria-label={t.buyAria(label, price, count)}
                   className="flex flex-col items-center gap-1 rounded-xl border border-white/10 bg-white/5 px-2 py-2.5 transition active:scale-95 hover:bg-white/10 aria-disabled:opacity-40"
                 >
@@ -228,6 +226,17 @@ export default function MapScreen({ progress, lang, onStart, onBuy, onMenu, onAd
         </section>
       </main>
 
+      {/* Панель монет: пополнение за рекламу */}
+      {coinsOpen && !pendingKind && (
+        <CoinsPanel
+          lang={lang}
+          coins={progress.coins}
+          reward={adReward}
+          onAdReward={onAdReward}
+          onClose={() => setCoinsOpen(false)}
+        />
+      )}
+
       {/* Подтверждение покупки */}
       {pendingItem && PendingIcon && (
         <BuyConfirm
@@ -242,17 +251,6 @@ export default function MapScreen({ progress, lang, onStart, onBuy, onMenu, onAd
             setPendingKind(null);
           }}
           onCancel={() => setPendingKind(null)}
-        />
-      )}
-
-      {/* Монеты: баланс и пополнение за рекламу */}
-      {coinsOpen && (
-        <CoinsModal
-          lang={lang}
-          coins={progress.coins}
-          reward={adReward}
-          onAdReward={onAdReward}
-          onClose={() => setCoinsOpen(false)}
         />
       )}
     </div>

@@ -199,7 +199,7 @@
   animation: anim-shake 0.4s ease-in-out;
 }
 
-/* Вспышка чипов целей в начале уровня — крупнее и дольше */
+/* Вспышка чипов целей в начале уровня */
 @keyframes goal-flash {
   0%,
   100% {
@@ -208,17 +208,17 @@
     box-shadow: 0 0 0 0 rgba(251, 191, 36, 0);
   }
   50% {
-    border-color: rgba(251, 191, 36, 0.65);
-    transform: scale(1.07);
-    box-shadow: 0 0 24px 4px rgba(251, 191, 36, 0.35);
+    border-color: rgba(251, 191, 36, 0.55);
+    transform: scale(1.06);
+    box-shadow: 0 0 18px 2px rgba(251, 191, 36, 0.25);
   }
 }
 
 .goal-flash {
-  animation: goal-flash 1.5s ease-in-out 5;
+  animation: goal-flash 1.3s ease-in-out 3;
 }
 
-/* Плавающие декоративные блоки в главном меню */
+/* Плавающие блоки на фоне меню */
 @keyframes float-block {
   0%,
   100% {
@@ -230,36 +230,36 @@
 }
 
 .float-block {
-  animation: float-block 7s ease-in-out infinite;
+  animation: 7s ease-in-out infinite float-block;
 }
 
-/* Пульс подарка за ежедневный вход */
+/* Пульс ежедневного подарка */
 @keyframes gift-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.45);
+    box-shadow: 0 0 0 0 #fbbf2473;
   }
   50% {
-    box-shadow: 0 0 0 14px rgba(251, 191, 36, 0);
+    box-shadow: 0 0 0 14px #fbbf2400;
   }
 }
 
 .gift-pulse {
-  animation: gift-pulse 2s ease-in-out infinite;
+  animation: 2s ease-in-out infinite gift-pulse;
 }
 
-/* Пружинистое появление карточек (подсказки, модалки) */
+/* Появление модалок/панелей */
 @keyframes tip-pop {
   0% {
-    transform: scale(0.82);
     opacity: 0;
+    transform: scale(0.82);
   }
   100% {
-    transform: scale(1);
     opacity: 1;
+    transform: scale(1);
   }
 }
 
 .tip-pop {
-  animation: tip-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) tip-pop;
 }

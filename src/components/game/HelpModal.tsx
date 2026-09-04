@@ -1,88 +1,52 @@
 "use client";
 
-// ── Помощь: правила игры и каждой механики по отдельности, с картинками ─────
+// ── Справка: правила игры с декоративными миниатюрами ───────────────────────
 
-import type { ReactNode } from "react";
-import {
-  ArrowDown,
-  ArrowRight,
-  Bomb,
-  Coins,
-  Flame,
-  Gift,
-  Hammer,
-  Heart,
-  Infinity as InfinityIcon,
-  Map as MapIcon,
-  Mountain,
-  Plus,
-  Shuffle,
-  Star,
-  X,
-} from "lucide-react";
+import { Bomb, ChevronRight, Coins, Flame, Gift, Hammer, Mountain, Plus, Shuffle, Star, X } from "lucide-react";
 import { tr, type Lang } from "./i18n";
 
-interface HelpModalProps {
-  lang: Lang;
-  onClose: () => void;
-}
+const TONE_CLS: Record<string, string> = {
+  empty: "bg-white/[0.04]",
+  rose: "bg-gradient-to-b from-rose-300 to-rose-500",
+  emerald: "bg-gradient-to-b from-emerald-300 to-emerald-500",
+  amber: "bg-gradient-to-b from-amber-300 to-amber-500",
+  sky: "bg-gradient-to-b from-sky-300 to-sky-500",
+  violet: "bg-gradient-to-b from-violet-300 to-violet-500",
+  orange: "bg-gradient-to-b from-orange-300 to-orange-500",
+  lime: "bg-gradient-to-b from-lime-300 to-lime-500",
+  stone: "bg-gradient-to-b from-stone-300 to-stone-500",
+};
 
-/** Клетка мини-поля для картинок */
-function Cell({
-  tone = "empty",
-  glow = false,
-  className = "",
-}: {
-  tone?: string;
-  glow?: boolean;
-  className?: string;
-}) {
-  const tones: Record<string, string> = {
-    empty: "bg-white/[0.07]",
-    rose: "bg-gradient-to-b from-rose-300 to-rose-500",
-    amber: "bg-gradient-to-b from-amber-300 to-amber-500",
-    emerald: "bg-gradient-to-b from-emerald-300 to-emerald-500",
-    sky: "bg-gradient-to-b from-sky-300 to-sky-500",
-    violet: "bg-gradient-to-b from-violet-300 to-violet-500",
-    orange: "bg-gradient-to-b from-orange-300 to-orange-500",
-    lime: "bg-gradient-to-b from-lime-300 to-lime-500",
-    stone: "bg-gradient-to-b from-stone-300 to-stone-500",
-  };
+function BlockDot({ tone, glow, className }: { tone: string; glow?: boolean; className?: string }) {
   return (
     <span
-      className={`size-3.5 rounded-[4px] ${tones[tone] ?? tones.empty} ${
+      className={`size-3.5 rounded-[4px] ${TONE_CLS[tone] ?? TONE_CLS.empty} ${
         glow ? "ring-2 ring-amber-200/90 shadow-[0_0_10px_rgba(251,191,36,0.55)]" : ""
-      } ${className}`}
+      } ${className ?? ""}`}
       aria-hidden="true"
     />
   );
 }
 
-/** Мини-поле 5×5 */
-function MiniGrid({ cells }: { cells: string[] }) {
+function BlockGrid({ cells }: { cells: string[] }) {
   return (
-    <div className="grid grid-cols-5 gap-[3px]">
-      {cells.map((tone, i) => (
-        <Cell key={i} tone={tone === "glow" ? "amber" : tone} glow={tone === "glow"} />
+    <div className="grid grid-cols-5 gap-[3px]" aria-hidden="true">
+      {cells.map((c, i) => (
+        <BlockDot key={i} tone={c === "glow" ? "amber" : c} glow={c === "glow"} />
       ))}
     </div>
   );
 }
 
-/** Клетка-бомба с искрой */
-function BombCell() {
+function BombDot() {
   return (
-    <span
-      className="relative size-3.5 rounded-[4px] bg-stone-900 ring-1 ring-rose-400/50"
-      aria-hidden="true"
-    >
+    <span className="relative size-3.5 rounded-[4px] bg-stone-900 ring-1 ring-rose-400/50" aria-hidden="true">
       <span className="absolute -right-0.5 -top-0.5 size-1 rounded-full bg-amber-300" />
     </span>
   );
 }
 
-/** Камень: гладкий / в трещинах / разбит */
-function StoneStage({ stage }: { stage: 0 | 1 | 2 }) {
+function StonePic({ stage }: { stage: number }) {
   if (stage === 2) {
     return (
       <span
@@ -116,7 +80,7 @@ function StoneStage({ stage }: { stage: 0 | 1 | 2 }) {
   );
 }
 
-function Section({ title, text, pic }: { title: string; text: string; pic: ReactNode }) {
+function HelpSection({ title, text, pic }: { title: string; text: string; pic: React.ReactNode }) {
   return (
     <section className="flex gap-3 rounded-xl border border-white/10 bg-white/5 p-3">
       <div className="flex w-[104px] shrink-0 flex-col items-center justify-center gap-1.5">{pic}</div>
@@ -128,36 +92,31 @@ function Section({ title, text, pic }: { title: string; text: string; pic: React
   );
 }
 
-export default function HelpModal({ lang, onClose }: HelpModalProps) {
+export default function HelpModal({ lang, onClose }: { lang: Lang; onClose: () => void }) {
   const t = tr(lang);
 
-  const goalChip = (
-    icon: ReactNode,
-    label: string,
-    now: string,
-  ): ReactNode => (
+  const goalChip = (Icon: typeof Flame, label: string, num: string) => (
     <span className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-[10px] font-black text-white/70">
-      {icon}
+      <Icon className="size-3.5 shrink-0" aria-hidden="true" />
       <span className="truncate">
-        {label} <span className="text-amber-300 tabular-nums">{now}</span>
+        {label} <span className="text-amber-300 tabular-nums">{num}</span>
       </span>
     </span>
   );
 
-  const sections: { title: string; text: string; pic: ReactNode }[] = [
+  const sections = [
     {
       title: t.helpBasicsTitle,
       text: t.helpBasicsText,
       pic: (
         <>
-          <div className="grid rotate-[-4deg] grid-cols-2 gap-[3px]">
-            <Cell tone="amber" />
-            <Cell tone="amber" />
-            <Cell tone="amber" />
-            <Cell tone="amber" />
+          <div className="grid rotate-[-4deg] grid-cols-2 gap-[3px]" aria-hidden="true">
+            {["amber", "amber", "amber", "amber"].map((c, i) => (
+              <BlockDot key={i} tone={c} />
+            ))}
           </div>
-          <ArrowDown className="size-3.5 text-white/40" aria-hidden="true" />
-          <MiniGrid
+          <ChevronRight className="size-3.5 text-white/40" aria-hidden="true" />
+          <BlockGrid
             cells={[
               "empty", "rose", "empty", "emerald", "empty",
               "empty", "empty", "amber", "empty", "empty",
@@ -175,11 +134,11 @@ export default function HelpModal({ lang, onClose }: HelpModalProps) {
       pic: (
         <div className="flex w-full flex-col gap-1.5">
           <span className="flex items-center gap-1.5 rounded-lg border border-amber-400/25 bg-amber-400/10 px-2 py-1.5 text-[10px] font-black text-amber-300">
-            <MapIcon className="size-3.5 shrink-0" aria-hidden="true" />
+            <Mountain className="size-3.5 shrink-0" aria-hidden="true" />
             <span className="truncate">{t.menuClassic}</span>
           </span>
           <span className="flex items-center gap-1.5 rounded-lg border border-sky-400/25 bg-sky-400/10 px-2 py-1.5 text-[10px] font-black text-sky-300">
-            <InfinityIcon className="size-3.5 shrink-0" aria-hidden="true" />
+            <Coins className="size-3.5 shrink-0" aria-hidden="true" />
             <span className="truncate">{t.menuEndless}</span>
           </span>
         </div>
@@ -190,10 +149,10 @@ export default function HelpModal({ lang, onClose }: HelpModalProps) {
       text: t.helpGoalsText,
       pic: (
         <div className="flex w-full flex-col gap-1.5">
-          {goalChip(<Flame className="size-3.5 shrink-0 text-orange-400" aria-hidden="true" />, t.goalLines, "0/3")}
-          {goalChip(<Star className="size-3.5 shrink-0 text-amber-400" aria-hidden="true" />, t.goalScore, "0/600")}
-          {goalChip(<Bomb className="size-3.5 shrink-0 text-rose-400" aria-hidden="true" />, t.goalDefuse, "0/2")}
-          {goalChip(<Mountain className="size-3.5 shrink-0 text-stone-300" aria-hidden="true" />, t.goalStones, "0/2")}
+          {goalChip(Flame, t.goalLines, "0/3")}
+          {goalChip(Star, t.goalScore, "0/600")}
+          {goalChip(Bomb, t.goalDefuse, "0/2")}
+          {goalChip(Mountain, t.goalStones, "0/2")}
         </div>
       ),
     },
@@ -202,7 +161,7 @@ export default function HelpModal({ lang, onClose }: HelpModalProps) {
       text: t.helpLinesText,
       pic: (
         <>
-          <MiniGrid
+          <BlockGrid
             cells={[
               "empty", "rose", "empty", "emerald", "empty",
               "empty", "empty", "amber", "empty", "empty",
@@ -210,16 +169,10 @@ export default function HelpModal({ lang, onClose }: HelpModalProps) {
               "glow", "glow", "glow", "glow", "glow",
             ]}
           />
-          <span className="mt-0.5 flex items-center gap-1">
-            <span className="rounded-full bg-orange-500/20 px-1.5 py-0.5 text-[9px] font-black text-orange-300">
-              ×2
-            </span>
-            <span className="rounded-full bg-rose-500/20 px-1.5 py-0.5 text-[9px] font-black text-rose-300">
-              ×4
-            </span>
-            <span className="rounded-full bg-red-500/25 px-1.5 py-0.5 text-[9px] font-black text-red-300">
-              ×6
-            </span>
+          <span className="mt-0.5 flex items-center gap-1" aria-hidden="true">
+            <span className="rounded-full bg-orange-500/20 px-1.5 py-0.5 text-[9px] font-black text-orange-300">×2</span>
+            <span className="rounded-full bg-rose-500/20 px-1.5 py-0.5 text-[9px] font-black text-rose-300">×4</span>
+            <span className="rounded-full bg-red-500/25 px-1.5 py-0.5 text-[9px] font-black text-red-300">×6</span>
           </span>
         </>
       ),
@@ -229,27 +182,27 @@ export default function HelpModal({ lang, onClose }: HelpModalProps) {
       text: t.helpBombsText,
       pic: (
         <>
-          <div className="grid grid-cols-5 gap-[3px]">
-            <Cell tone="empty" />
-            <Cell tone="rose" />
-            <Cell tone="empty" />
-            <Cell tone="empty" />
-            <Cell tone="violet" />
-            <Cell tone="glow" />
-            <Cell tone="glow" />
-            <BombCell />
-            <Cell tone="glow" />
-            <Cell tone="glow" />
-            <Cell tone="empty" />
-            <Cell tone="emerald" />
-            <Cell tone="empty" />
-            <Cell tone="empty" />
-            <Cell tone="empty" />
+          <div className="grid grid-cols-5 gap-[3px]" aria-hidden="true">
+            <BlockDot tone="empty" />
+            <BlockDot tone="rose" />
+            <BlockDot tone="empty" />
+            <BlockDot tone="empty" />
+            <BlockDot tone="violet" />
+            <BlockDot tone="glow" />
+            <BlockDot tone="glow" />
+            <BombDot />
+            <BlockDot tone="glow" />
+            <BlockDot tone="glow" />
+            <BlockDot tone="empty" />
+            <BlockDot tone="emerald" />
+            <BlockDot tone="empty" />
+            <BlockDot tone="empty" />
+            <BlockDot tone="empty" />
           </div>
-          <span className="flex items-center gap-1">
-            <Heart className="size-3.5 text-rose-500" fill="currentColor" aria-hidden="true" />
-            <Heart className="size-3.5 text-rose-500" fill="currentColor" aria-hidden="true" />
-            <Heart className="size-3.5 text-white/15" aria-hidden="true" />
+          <span className="flex items-center gap-1" aria-hidden="true">
+            <Star className="size-3.5 text-rose-500" fill="currentColor" />
+            <Star className="size-3.5 text-rose-500" fill="currentColor" />
+            <Star className="size-3.5 text-white/15" />
           </span>
         </>
       ),
@@ -258,12 +211,12 @@ export default function HelpModal({ lang, onClose }: HelpModalProps) {
       title: t.helpStonesTitle,
       text: t.helpStonesText,
       pic: (
-        <div className="flex items-center gap-1">
-          <StoneStage stage={0} />
-          <ArrowRight className="size-3 text-white/40" aria-hidden="true" />
-          <StoneStage stage={1} />
-          <ArrowRight className="size-3 text-white/40" aria-hidden="true" />
-          <StoneStage stage={2} />
+        <div className="flex items-center gap-1" aria-hidden="true">
+          <StonePic stage={0} />
+          <ChevronRight className="size-3 text-white/40" />
+          <StonePic stage={1} />
+          <ChevronRight className="size-3 text-white/40" />
+          <StonePic stage={2} />
         </div>
       ),
     },
@@ -272,7 +225,7 @@ export default function HelpModal({ lang, onClose }: HelpModalProps) {
       text: t.helpCollectText,
       pic: (
         <>
-          <MiniGrid
+          <BlockGrid
             cells={[
               "empty", "empty", "emerald", "empty", "empty",
               "empty", "amber", "empty", "empty", "rose",
@@ -281,8 +234,8 @@ export default function HelpModal({ lang, onClose }: HelpModalProps) {
               "empty", "violet", "empty", "empty", "empty",
             ]}
           />
-          <span className="mt-0.5 flex items-center gap-1.5">
-            <Cell tone="emerald" glow />
+          <span className="mt-0.5 flex items-center gap-1.5" aria-hidden="true">
+            <BlockDot tone="emerald" glow />
             <span className="text-[10px] font-black text-emerald-300 tabular-nums">2/12</span>
           </span>
         </>
@@ -292,21 +245,15 @@ export default function HelpModal({ lang, onClose }: HelpModalProps) {
       title: t.helpToolsTitle,
       text: t.helpToolsText,
       pic: (
-        <div className="flex flex-col gap-1.5">
-          <span className="flex items-center gap-2">
-            <span className="grid size-7 place-items-center rounded-lg bg-rose-500 shadow-md">
-              <Hammer className="size-4 text-white" aria-hidden="true" />
-            </span>
+        <div className="flex flex-col gap-1.5" aria-hidden="true">
+          <span className="grid size-7 place-items-center rounded-lg bg-rose-500 shadow-md">
+            <Hammer className="size-4 text-white" />
           </span>
-          <span className="flex items-center gap-2">
-            <span className="grid size-7 place-items-center rounded-lg bg-teal-500 shadow-md">
-              <Shuffle className="size-4 text-white" aria-hidden="true" />
-            </span>
+          <span className="grid size-7 place-items-center rounded-lg bg-teal-500 shadow-md">
+            <Shuffle className="size-4 text-white" />
           </span>
-          <span className="flex items-center gap-2">
-            <span className="grid size-7 place-items-center rounded-lg bg-amber-500 shadow-md">
-              <Plus className="size-4 text-white" aria-hidden="true" />
-            </span>
+          <span className="grid size-7 place-items-center rounded-lg bg-amber-500 shadow-md">
+            <Plus className="size-4 text-white" />
           </span>
         </div>
       ),
@@ -315,15 +262,15 @@ export default function HelpModal({ lang, onClose }: HelpModalProps) {
       title: t.helpCoinsTitle,
       text: t.helpCoinsText,
       pic: (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5" aria-hidden="true">
           <span className="flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/15 px-2 py-0.5 text-[10px] font-black text-amber-300">
-            <Coins className="size-3" aria-hidden="true" /> +30
+            <Coins className="size-3" /> +30
           </span>
           <span className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] font-black text-white/70">
-            <Star className="size-3 text-amber-400" fill="currentColor" aria-hidden="true" /> ★★
+            <Star className="size-3 text-amber-400" fill="currentColor" /> ★★
           </span>
           <span className="flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/15 px-2 py-0.5 text-[10px] font-black text-emerald-300">
-            <Gift className="size-3" aria-hidden="true" /> +50
+            <Gift className="size-3" /> +50
           </span>
         </div>
       ),
@@ -356,7 +303,7 @@ export default function HelpModal({ lang, onClose }: HelpModalProps) {
         </div>
         <div className="flex-1 space-y-2.5 overflow-y-auto p-3 pb-5 [scrollbar-width:thin]">
           {sections.map((s) => (
-            <Section key={s.title} title={s.title} text={s.text} pic={s.pic} />
+            <HelpSection key={s.title} title={s.title} text={s.text} pic={s.pic} />
           ))}
         </div>
       </div>

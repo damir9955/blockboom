@@ -211,8 +211,8 @@ export function difficultyOf(score: number): number {
 /** Доля клеток цвета цели в лотке (подсветка «собери цвет») */
 export const GOAL_COLOR_BIAS = 0.25;
 
-/** Фабрика фигур: взвешенный выбор формы и цвета (+уклон к цвету цели) */
-function makePieceFactory(difficulty: number, goalColor?: number, goalBias = GOAL_COLOR_BIAS): () => Piece {
+/** Фабрика одной фигуры: вес по сложности + цвет цели с байасом */
+function makePiece(difficulty: number, goalColor?: number, goalBias = GOAL_COLOR_BIAS): Piece {
   const t = Math.max(0, Math.min(1, difficulty));
   const smallBias = 1 - 0.5 * t;
   const bigBias = 0.35 + 1.9 * t;
@@ -221,19 +221,19 @@ function makePieceFactory(difficulty: number, goalColor?: number, goalBias = GOA
     return base * (s.size <= 4 ? smallBias : bigBias);
   });
   const total = weights.reduce((a, b) => a + b, 0);
-  const pick = (): Shape => {
-    let r = Math.random() * total;
-    for (let i = 0; i < SHAPES.length; i++) {
-      r -= weights[i];
-      if (r <= 0) return SHAPES[i];
+  let r = Math.random() * total;
+  let shape = SHAPES[0];
+  for (let i = 0; i < SHAPES.length; i++) {
+    r -= weights[i];
+    if (r <= 0) {
+      shape = SHAPES[i];
+      break;
     }
-    return SHAPES[0];
-  };
-  const randColor = () => {
-    const bias = goalColor !== undefined && goalColor >= 1 && goalColor <= 8;
-    return bias && Math.random() < goalBias ? goalColor : 1 + Math.floor(Math.random() * COLOR_COUNT);
-  };
-  return () => ({ shape: pick(), color: randColor(), bomb: null, bombTimer: null });
+  }
+  const bias = goalColor !== undefined && goalColor >= 1 && goalColor <= 8;
+  const color =
+    bias && Math.random() < goalBias ? goalColor : 1 + Math.floor(Math.random() * COLOR_COUNT);
+  return { shape, color, bomb: null, bombTimer: null };
 }
 
 /** Тройка новых фигур; гарантирует, что хотя бы одна влезает на поле.
@@ -246,7 +246,7 @@ export function generatePieces(
   goalBias = GOAL_COLOR_BIAS,
 ): Piece[] {
   const t = Math.max(0, Math.min(1, difficulty));
-  const fresh = makePieceFactory(difficulty, goalColor, goalBias);
+  const fresh = (): Piece => makePiece(t, goalColor, goalBias);
 
   for (let attempt = 0; attempt < 12; attempt++) {
     const pieces: Piece[] = [fresh(), fresh(), fresh()];
@@ -263,18 +263,16 @@ export function generatePieces(
   return [fresh(), fresh(), fresh()].map((p, i) => (i === 0 ? { ...p, shape: SHAPES[0] } : p));
 }
 
-/** Одна новая фигура (бесконечный режим: слот заполняется сразу).
- *  Без гарантии входимости — как в классическом Block Blast:
- *  партия живёт, пока хотя бы одна фигура лотка помещается.
- *  bombChance > 0 — фигура может нести бомбу (давление в сложных волнах). */
+/** Одна новая фигура (бесконечный режим: поставленная сразу заменяется новой).
+ *  bombChance — вероятность того, что фигура несёт бомбу. */
 export function generatePiece(difficulty: number, goalColor?: number, bombChance = 0): Piece {
   const t = Math.max(0, Math.min(1, difficulty));
-  const p = makePieceFactory(difficulty, goalColor)();
+  const fresh = makePiece(t, goalColor);
   if (bombChance > 0 && Math.random() < bombChance) {
-    p.bomb = Math.floor(Math.random() * p.shape.cells.length);
-    p.bombTimer = bombTimerFor(t);
+    fresh.bomb = Math.floor(Math.random() * fresh.shape.cells.length);
+    fresh.bombTimer = bombTimerFor(t);
   }
-  return p;
+  return fresh;
 }
 
 /** Фитиль бомбы: тиков до взрыва (сложнее — короче) */
@@ -349,12 +347,14 @@ export function bombsInLines(grid: Grid, rows: number[], cols: number[]): number
 /** Максимум полевых бомб на поле одновременно */
 export const MAX_BOARD_BOMBS = 4;
 
-/** Спавн полевой бомбы на случайной пустой клетке — БЕЗОПАСНО:
- *  клетка подбирается так, чтобы после бомбы хотя бы одна фигура лотка
- *  всё ещё помещалась (иначе бомба закрывала последний вариант — автопроигрыш).
- *  Лоток пуст → любая клетка ок (сразу после этого он наполнится с гарантией).
- *  null — безопасной клетки нет или поле заполнено. */
-export function spawnBoardBomb(grid: Grid, timer: number, tray: (Piece | null)[] = []): [number, number] | null {
+/** Спавн полевой бомбы на случайной пустой клетке. null — поле заполнено.
+ *  БЕЗОПАСНЫЙ СПАВН: если передан лоток pieces, бомба не появится в клетке,
+ *  после которой ни одна фигура лотка больше не влезает на поле. */
+export function spawnBoardBomb(
+  grid: Grid,
+  timer: number,
+  pieces: (Piece | null)[] = [],
+): [number, number] | null {
   const empty: [number, number][] = [];
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
@@ -362,16 +362,12 @@ export function spawnBoardBomb(grid: Grid, timer: number, tray: (Piece | null)[]
     }
   }
   if (empty.length === 0) return null;
-  // перемешиваем кандидатов и ищем безопасную клетку
-  for (let i = empty.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [empty[i], empty[j]] = [empty[j], empty[i]];
-  }
-  const live = tray.filter((p): p is Piece => p !== null);
+  shuffle(empty);
+  const tray = pieces.filter((p) => p !== null);
   const safe = (r: number, c: number): boolean => {
-    if (live.length === 0) return true;
+    if (tray.length === 0) return true;
     grid[r][c] = -timer;
-    const ok = live.some((p) => canPlaceAnywhere(grid, p.shape));
+    const ok = tray.some((p) => canPlaceAnywhere(grid, p.shape));
     grid[r][c] = 0;
     return ok;
   };
@@ -400,33 +396,36 @@ export function spawnStones(grid: Grid, count: number): [number, number][] {
   return placed;
 }
 
-/** Безопасный спавн камней ПОСЕРЕДИ игры (бесконечный режим): камень ставится
- *  только на клетку, после которой хотя бы одна фигура лотка всё ещё влезает —
- *  чтобы новый камень не закрыл последний вариант расстановки.
- *  Возвращает координаты реально поставленных камней. */
-export function spawnStonesSafe(grid: Grid, count: number, tray: (Piece | null)[]): [number, number][] {
+/** Камни на случайных пустых клетках — безопасно: после каждого камня
+ *  хотя бы одна фигура лотка должна влезать (для катящихся задач endless). */
+export function spawnStonesSafe(
+  grid: Grid,
+  count: number,
+  pieces: (Piece | null)[] = [],
+): [number, number][] {
   const empty: [number, number][] = [];
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
       if (grid[r][c] === 0) empty.push([r, c]);
     }
   }
-  for (let i = empty.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [empty[i], empty[j]] = [empty[j], empty[i]];
-  }
-  const live = tray.filter((p): p is Piece => p !== null);
+  shuffle(empty);
+  const tray = pieces.filter((p) => p !== null);
   const placed: [number, number][] = [];
   for (const [r, c] of empty) {
     if (placed.length >= count) break;
     grid[r][c] = STONE_INTACT;
-    if (live.length === 0 || live.some((p) => canPlaceAnywhere(grid, p.shape))) {
-      placed.push([r, c]);
-    } else {
-      grid[r][c] = 0; // эта клетка была критичной — откатываем
-    }
+    if (tray.length === 0 || tray.some((p) => canPlaceAnywhere(grid, p.shape))) placed.push([r, c]);
+    else grid[r][c] = 0;
   }
   return placed;
+}
+
+function shuffle<T>(arr: T[]): void {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
 }
 
 /** Сколько бомб сейчас на поле (клетки с отрицательным значением) */

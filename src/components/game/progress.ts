@@ -1,10 +1,9 @@
-// ── Прогресс игрока: пройденные уровни, звёзды, монеты, бустеры ──────────────
+// ── Прогресс игрока: уровни, звёзды, монеты, бустеры, подарок, рекорд ────────
 
 import { LEVEL_COUNT } from "./levels";
 
 export type BoosterKind = "hammer" | "shuffle" | "plus5";
 
-/** Краткие обучающие подсказки, уже показанные игроку (показываются один раз) */
 export type TipKind = "start" | "bomb" | "stone";
 
 export interface Progress {
@@ -15,11 +14,11 @@ export interface Progress {
   coins: number;
   boosters: { hammer: number; shuffle: number; plus5: number };
   muted: boolean;
-  /** показанные один раз подсказки: старт / бомба / камень */
+  /** какие обучающие подсказки уже показаны */
   tips: Record<TipKind, boolean>;
-  /** день последнего забранного ежедневного подарка (локальный индекс дня, 0 — никогда) */
+  /** день последнего полученного подарка (номер дня, см. dayNumber) */
   giftDay: number;
-  /** лучший результат в бесконечном режиме (0 — ещё не играли) */
+  /** рекорд очков в бесконечном режиме */
   bestEndless: number;
 }
 
@@ -36,43 +35,16 @@ export const START_PROGRESS: Progress = {
   bestEndless: 0,
 };
 
-/** Сколько монет даёт ежедневный подарок за вход */
-export const DAILY_GIFT = 50;
-
-/** Локальный индекс дня (устойчив к таймзоне устройства) */
-export function dayIndex(d: Date = new Date()): number {
-  return Math.floor((d.getTime() - d.getTimezoneOffset() * 60_000) / 86_400_000);
-}
-
-/** Доступен ли ежедневный подарок прямо сейчас */
-export function dailyGiftAvailable(p: Progress): boolean {
-  return p.giftDay < dayIndex();
-}
-
-/** Забрать ежедневный подарок; null — уже забран сегодня */
-export function claimDailyGift(p: Progress): Progress | null {
-  const today = dayIndex();
-  if (p.giftDay >= today) return null;
-  return { ...p, giftDay: today, coins: p.coins + DAILY_GIFT };
-}
-
-/** Зафиксировать рекорд бесконечного режима; null — рекорд не побит */
-export function recordEndlessBest(p: Progress, score: number): Progress | null {
-  if (score <= p.bestEndless) return null;
-  return { ...p, bestEndless: score };
-}
-
-/** Отметить подсказку показанной (идемпотентно) */
-export function markTipSeen(p: Progress, kind: TipKind): Progress {
-  if (p.tips[kind]) return p;
-  return { ...p, tips: { ...p.tips, [kind]: true } };
-}
-
 export const PRICES: Record<BoosterKind, number> = {
   hammer: 100,
   shuffle: 150,
   plus5: 120,
 };
+
+/** Номер текущего дня (без таймзонных сюрпризов) — для ежедневного подарка */
+export function dayNumber(d: Date = new Date()): number {
+  return Math.floor((d.getTime() - 60_000 * d.getTimezoneOffset()) / 86_400_000);
+}
 
 export function loadProgress(): Progress {
   try {
@@ -146,6 +118,15 @@ export function awardLevel(p: Progress, n: number, stars: number, coins: number)
     unlocked: nextUnlocked,
     coins: p.coins + Math.max(0, coins),
   };
+}
+
+/** Ежедневный подарок: +50 монет, один раз в день; null — уже получен */
+export const GIFT_REWARD = 50;
+
+export function claimDailyGift(p: Progress): Progress | null {
+  const today = dayNumber();
+  if (p.giftDay >= today) return null;
+  return { ...p, giftDay: today, coins: p.coins + GIFT_REWARD };
 }
 
 /** Купить бустер; null — не хватило монет */

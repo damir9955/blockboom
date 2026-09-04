@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import GameScreen, { type GameMode, type LevelResult } from "@/components/game/GameScreen";
-import MainMenu from "@/components/game/MainMenu";
 import MapScreen from "@/components/game/MapScreen";
+import MenuScreen from "@/components/game/MenuScreen";
 import { LEVELS } from "@/components/game/levels";
 import { detectLang, saveLang, type Lang } from "@/components/game/i18n";
 import {
@@ -12,9 +12,7 @@ import {
   claimDailyGift,
   firstClearOf,
   loadProgress,
-  markTipSeen,
   PRICES,
-  recordEndlessBest,
   saveProgress,
   spendBooster,
   START_PROGRESS,
@@ -69,12 +67,13 @@ export default function Home() {
     setView("game");
   };
 
-  /** Бесконечный режим: игра без остановки — задачи сменяют друг друга, монеты не начисляются */
   const startEndless = () => {
     setMode("endless");
     setGameKey((k) => k + 1);
     setView("game");
   };
+
+  const toMenu = () => setView("menu");
 
   const handleLevelEnd = (result: LevelResult, goNext: boolean) => {
     if (result.won) {
@@ -85,12 +84,11 @@ export default function Home() {
       setGameKey((k) => k + 1);
       // остаёмся в игре на следующем уровне
     } else {
-      setView("map");
+      setView(mode === "endless" ? "menu" : "map");
     }
   };
 
-  const handleExit = () => setView("map");
-  const handleMenu = () => setView("menu");
+  const handleExit = () => setView(mode === "endless" ? "menu" : "map");
 
   const handleUseBooster = (kind: BoosterKind) => {
     applyProgress((p) => spendBooster(p, kind));
@@ -116,7 +114,16 @@ export default function Home() {
     saveProgress(next);
   };
 
-  /** Подарок за ежедневный вход; false — уже забран сегодня */
+  const handleToggleMute = () => {
+    applyProgress((p) => ({ ...p, muted: !p.muted }));
+  };
+
+  const handleSetLang = (l: Lang) => {
+    saveLang(l);
+    setLang(l);
+  };
+
+  /** Ежедневный подарок: один раз в день */
   const handleClaimGift = (): boolean => {
     let ok = false;
     applyProgress((p) => {
@@ -130,32 +137,20 @@ export default function Home() {
     return ok;
   };
 
-  /** Зафиксировать рекорд бесконечного режима */
-  const handleEndlessBest = (score: number) => {
-    applyProgress((p) => recordEndlessBest(p, score));
-  };
-
-  /** Отметить краткую подсказку показанной (показываем один раз) */
   const handleTipSeen = (kind: TipKind) => {
-    applyProgress((p) => markTipSeen(p, kind));
+    applyProgress((p) => (p.tips[kind] ? p : { ...p, tips: { ...p.tips, [kind]: true } }));
   };
 
-  const handleToggleMute = () => {
-    applyProgress((p) => ({ ...p, muted: !p.muted }));
+  const handleBestScore = (score: number) => {
+    applyProgress((p) => (score <= p.bestEndless ? null : { ...p, bestEndless: score }));
   };
 
-  const handleSetLang = (l: Lang) => {
-    saveLang(l);
-    setLang(l);
-  };
-
-  // в бесконечном режиме уровень не используется: наборы задач генерируются внутри игры
   const level = mode === "endless" ? null : LEVELS[levelN - 1];
 
   return (
     <>
       {view === "menu" ? (
-        <MainMenu
+        <MenuScreen
           progress={progress}
           lang={lang}
           onContinue={startLevel}
@@ -174,7 +169,7 @@ export default function Home() {
           lang={lang}
           onStart={startLevel}
           onBuy={handleBuy}
-          onMenu={handleMenu}
+          onMenu={toMenu}
           onAdReward={handleAdReward}
           adReward={AD_REWARD}
         />
@@ -184,7 +179,7 @@ export default function Home() {
           level={level}
           mode={mode}
           best={progress.bestEndless}
-          firstClear={mode === "endless" ? false : firstClearOf(progress, levelN)}
+          firstClear={mode !== "endless" && firstClearOf(progress, levelN)}
           boosters={progress.boosters}
           coins={progress.coins}
           muted={progress.muted}
@@ -197,8 +192,8 @@ export default function Home() {
           adReward={AD_REWARD}
           onTipSeen={handleTipSeen}
           onLevelEnd={handleLevelEnd}
-          onExit={mode === "endless" ? handleMenu : handleExit}
-          onBestScore={handleEndlessBest}
+          onExit={handleExit}
+          onBestScore={handleBestScore}
         />
       )}
     </>

@@ -1,5 +1,7 @@
 /* Блок Бум: service worker — офлайн-режим для PWA/TWA */
-const CACHE = "blockboom-v1";
+// v2: новая версия кэша — при обновлении старый кэш (v1) удаляется,
+// чтобы игроки гарантированно получали свежую сборку после деплоя
+const CACHE = "blockboom-v2";
 const PRECACHE = [
   "/",
   "/icons/icon-192.png",
