@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { Toaster } from "@/components/ui/toaster";
 import PwaRegister from "@/components/pwa-register";
 
 export const metadata: Metadata = {
@@ -60,7 +59,6 @@ export default function RootLayout({
     <html lang="ru" suppressHydrationWarning>
       <body className="antialiased bg-background text-foreground overscroll-none">
         {children}
-        <Toaster />
         <PwaRegister />
       </body>
     </html>

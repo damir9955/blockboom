@@ -4,7 +4,6 @@
 
 import { useCallback, useRef, useState, type ElementType } from "react";
 import {
-  Bomb,
   CircleHelp,
   Coins,
   Gift,
@@ -98,26 +97,31 @@ export default function MenuScreen({
 
   return (
     <div
-      className="relative flex h-[100dvh] w-full flex-col items-center overflow-hidden bg-[#131118] bg-gradient-to-b from-[#1d1828] via-[#141219] to-[#0f0e14] text-white select-none"
+      className="relative flex h-[100dvh] w-full flex-col items-center overflow-hidden bg-[#0f0d15] text-white select-none"
       aria-label={t.menuAria}
     >
-      {/* декоративный фон */}
+      {/* реалистичный фон: арт + градиент + виньетка */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-x-[-30%] top-[-18%] h-[62%] bg-[radial-gradient(ellipse_at_center,rgba(251,191,36,0.16),transparent_65%)]" />
-        <div className="absolute inset-x-[-20%] bottom-[-25%] h-[55%] bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.12),transparent_65%)]" />
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: "url('/art/menu-bg.jpg')" }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#171325]/70 via-[#141219]/80 to-[#0d0b12]/95" />
+        <div className="absolute inset-x-[-30%] top-[-18%] h-[62%] bg-[radial-gradient(ellipse_at_center,rgba(251,191,36,0.14),transparent_65%)]" />
+        <div className="absolute inset-x-[-20%] bottom-[-25%] h-[55%] bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.14),transparent_65%)]" />
         {FLOAT_BLOCKS.map((b, i) => (
           <span key={i} className={`float-block absolute ${b.cls}`} style={b.style} />
         ))}
       </div>
 
       <main className="relative flex w-full max-w-[420px] flex-1 flex-col px-5 pb-[max(env(safe-area-inset-bottom),16px)] pt-[max(env(safe-area-inset-top),14px)]">
-        {/* шапка: звёзды и монеты */}
+        {/* шапка: звёзды и монеты — стеклянные чипы */}
         <div className="flex items-center justify-between gap-2">
           <div
-            className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-black text-amber-200 tabular-nums"
+            className="chip flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-black text-amber-200 tabular-nums"
             aria-label={t.menuFooterStars(stars, TOTAL_STARS)}
           >
-            <Star className="size-4 text-amber-400" fill="currentColor" aria-hidden="true" />
+            <Star className="size-4 text-amber-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]" fill="currentColor" aria-hidden="true" />
             {stars}
             <span className="text-[10px] font-bold text-white/30">/ {TOTAL_STARS}</span>
           </div>
@@ -125,36 +129,39 @@ export default function MenuScreen({
             type="button"
             onClick={() => setCoinsOpen(true)}
             aria-label={t.coinsOpenAria}
-            className="flex items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-400/10 px-3.5 py-1.5 text-sm font-black text-amber-300 tabular-nums transition active:scale-90 hover:bg-amber-400/20"
+            className="chip flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-black text-amber-300 tabular-nums transition active:scale-90"
           >
-            <Coins className="size-4" aria-hidden="true" />
+            <Coins className="size-4 drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]" aria-hidden="true" />
             {progress.coins}
           </button>
         </div>
 
-        {/* логотип */}
-        <header className="flex flex-col items-center pb-5 pt-6">
-          <span className="grid size-[72px] rotate-3 place-items-center rounded-3xl bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 shadow-2xl shadow-orange-950/50">
-            <Bomb className="size-9 -rotate-6 text-white" aria-hidden="true" />
+        {/* логотип: реалистичная иконка + объёмный текст */}
+        <header className="flex flex-col items-center pb-5 pt-7">
+          <span className="relative">
+            <img
+              src="/art/icon.png"
+              alt=""
+              aria-hidden="true"
+              className="size-[88px] rotate-3 rounded-[26px] border-2 border-white/25 shadow-[0_18px_40px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.35)]"
+            />
           </span>
-          <h1 className="mt-4 text-[34px] font-black leading-none tracking-wide text-white drop-shadow-[0_4px_16px_rgba(251,191,36,0.35)]">
-            {t.appName}
-          </h1>
+          <h1 className="logo-3d mt-4 text-[36px] font-black leading-none tracking-wide">{t.appName}</h1>
         </header>
 
         {/* подарок + магазин инструментов */}
         <section
-          className="rounded-2xl border border-white/10 bg-white/[0.04] p-3.5 shadow-xl shadow-black/30"
+          className="panel rounded-2xl p-3.5"
           aria-label={t.giftSectionAria}
         >
           {giftReady ? (
             <div className="flex items-center gap-3">
-              <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 gift-pulse shadow-lg">
+              <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-gradient-to-b from-amber-300 to-orange-600 gift-pulse shadow-[inset_0_2px_0_rgba(255,255,255,0.45),0_8px_18px_rgba(120,53,15,0.55)]">
                 <Gift className="size-5 text-white" aria-hidden="true" />
               </span>
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-black text-white">{t.giftTitle}</div>
-                <div className="text-[11px] font-medium text-white/40">{t.coinsTotal}</div>
+                <div className="text-[11px] font-medium text-white/60">{t.coinsTotal}</div>
               </div>
               <button
                 type="button"
@@ -165,14 +172,14 @@ export default function MenuScreen({
                   }
                 }}
                 aria-label={t.giftAria(GIFT_REWARD)}
-                className="shrink-0 rounded-xl bg-gradient-to-b from-amber-400 to-orange-500 px-3.5 py-2.5 text-xs font-black text-[#221a08] shadow-md shadow-orange-950/40 transition active:scale-95"
+                className="btn-gold shrink-0 rounded-xl px-3.5 py-2.5 text-xs font-black"
               >
                 {t.giftClaim(GIFT_REWARD)}
               </button>
             </div>
           ) : (
             <div className="flex items-center gap-3 opacity-75">
-              <span className="grid size-11 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5">
+              <span className="chip grid size-11 shrink-0 place-items-center rounded-xl">
                 <Gift className="size-5 text-white/40" aria-hidden="true" />
               </span>
               <div className="min-w-0">
@@ -191,13 +198,13 @@ export default function MenuScreen({
                   else setCoinsOpen(true);
                 }}
                 aria-label={t.buyAria(label, price, count)}
-                className="flex flex-col items-center gap-1 rounded-xl border border-white/10 bg-white/5 px-2 py-2.5 transition active:scale-95 hover:bg-white/10"
+                className="chip flex flex-col items-center gap-1 rounded-xl px-2 py-2.5 transition active:scale-95"
               >
                 <span className="relative">
-                  <span className={`grid size-9 place-items-center rounded-lg ${tone} shadow-md`}>
+                  <span className={`grid size-9 place-items-center rounded-lg shadow-[inset_0_2px_0_rgba(255,255,255,0.35),0_6px_12px_rgba(0,0,0,0.45)] ${tone}`}>
                     <Icon className="size-5 text-white" aria-hidden="true" />
                   </span>
-                  <span className="absolute -right-2 -top-1.5 grid min-w-5 place-items-center rounded-full bg-white px-1 text-[10px] font-black text-black">
+                  <span className="absolute -right-2 -top-1.5 grid min-w-5 place-items-center rounded-full bg-white px-1 text-[10px] font-black text-black shadow-md">
                     {count}
                   </span>
                 </span>
@@ -211,19 +218,19 @@ export default function MenuScreen({
           </div>
         </section>
 
-        {/* кнопки режимов */}
-        <div className="mt-6 flex flex-col gap-3">
+        {/* кнопки режимов: сочные 3D */}
+        <div className="mt-6 flex flex-col gap-3.5">
           <button
             type="button"
             onClick={() => onContinue(continueLevel)}
             aria-label={t.menuContinueAria(continueLevel)}
-            className="flex flex-col items-center rounded-2xl bg-gradient-to-b from-amber-400 to-orange-500 py-4 shadow-xl shadow-orange-950/50 transition active:scale-95"
+            className="btn-gold flex flex-col items-center rounded-2xl py-4"
           >
-            <span className="flex items-center gap-2.5 text-xl font-black text-[#221a08]">
-              <Play className="size-6 fill-[#221a08]" aria-hidden="true" />
+            <span className="flex items-center gap-2.5 text-xl font-black">
+              <Play className="size-6 fill-[#3a2205]" aria-hidden="true" />
               {t.menuContinue}
             </span>
-            <span className="mt-0.5 text-[11px] font-bold text-[#221a08]/70">
+            <span className="mt-0.5 text-[11px] font-bold opacity-75">
               {allDone ? t.menuContinueAll : t.menuLevelSub(continueLevel)}
             </span>
           </button>
@@ -231,22 +238,22 @@ export default function MenuScreen({
             type="button"
             onClick={onLevelSelect}
             aria-label={t.menuLevelSelectAria}
-            className="flex items-center justify-center gap-2.5 rounded-2xl border border-white/15 bg-white/[0.07] py-3.5 text-base font-black text-white/90 transition active:scale-95 hover:bg-white/[0.12]"
+            className="btn-glass flex items-center justify-center gap-2.5 rounded-2xl py-3.5 text-base font-black text-white/90"
           >
-            <Mountain className="size-5 text-amber-300" aria-hidden="true" />
+            <Mountain className="size-5 text-amber-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]" aria-hidden="true" />
             {t.menuLevelSelect}
           </button>
           <button
             type="button"
             onClick={onEndless}
             aria-label={t.menuEndlessAria}
-            className="flex flex-col items-center rounded-2xl border border-sky-400/25 bg-gradient-to-b from-sky-500/20 to-indigo-600/20 py-3.5 shadow-lg shadow-sky-950/40 transition active:scale-95 hover:from-sky-500/30"
+            className="btn-sky flex flex-col items-center rounded-2xl py-3.5"
           >
-            <span className="flex items-center gap-2.5 text-lg font-black text-white">
-              <InfinityIcon className="size-6 text-sky-300" aria-hidden="true" />
+            <span className="flex items-center gap-2.5 text-lg font-black">
+              <InfinityIcon className="size-6" aria-hidden="true" />
               {t.menuEndless}
             </span>
-            <span className="mt-0.5 text-[11px] font-bold text-white/45">
+            <span className="mt-0.5 text-[11px] font-bold text-white/60">
               {t.menuEndlessSub(progress.bestEndless)}
             </span>
           </button>
@@ -255,7 +262,7 @@ export default function MenuScreen({
               type="button"
               onClick={() => setHelpOpen(true)}
               aria-label={t.menuHelpAria}
-              className="flex items-center justify-center gap-2 rounded-2xl border border-sky-400/25 bg-sky-400/10 py-3 text-sm font-black text-sky-300 transition active:scale-95 hover:bg-sky-400/20"
+              className="btn-glass flex items-center justify-center gap-2 rounded-2xl py-3 text-sm font-black text-sky-300"
             >
               <CircleHelp className="size-4.5" aria-hidden="true" />
               {t.menuHelp}
@@ -264,7 +271,7 @@ export default function MenuScreen({
               type="button"
               onClick={() => setSettingsOpen(true)}
               aria-label={t.menuSettingsAria}
-              className="flex items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/[0.07] py-3 text-sm font-black text-white/80 transition active:scale-95 hover:bg-white/[0.12]"
+              className="btn-glass flex items-center justify-center gap-2 rounded-2xl py-3 text-sm font-black text-white/85"
             >
               <Settings className="size-4.5" aria-hidden="true" />
               {t.menuSettings}
@@ -296,19 +303,19 @@ export default function MenuScreen({
           aria-modal="true"
           aria-label={t.settingsTitle}
         >
-          <div className="tip-pop w-[86%] max-w-xs rounded-2xl border border-white/10 bg-[#1c1a24] p-5 shadow-2xl">
+          <div className="panel tip-pop w-[86%] max-w-xs rounded-2xl p-5">
             <div className="flex items-center justify-between gap-2">
               <div className="text-sm font-black uppercase tracking-widest text-white/70">{t.settingsTitle}</div>
               <button
                 type="button"
                 onClick={() => setSettingsOpen(false)}
                 aria-label={t.close}
-                className="rounded-xl border border-white/10 bg-white/5 p-2 text-white/60 transition active:scale-90 hover:bg-white/10"
+                className="chip rounded-xl p-2 text-white/60 transition active:scale-90"
               >
                 <X className="size-4" />
               </button>
             </div>
-            <div className="mt-4 flex items-center justify-between rounded-xl border border-white/10 bg-white/5 p-3.5">
+            <div className="chip mt-4 flex items-center justify-between rounded-xl p-3.5">
               <div className="flex items-center gap-2.5 text-sm font-bold text-white/80">
                 {progress.muted ? (
                   <VolumeX className="size-5 text-white/45" aria-hidden="true" />
@@ -332,7 +339,7 @@ export default function MenuScreen({
                 />
               </button>
             </div>
-            <div className="mt-2.5 rounded-xl border border-white/10 bg-white/5 p-3.5">
+            <div className="chip mt-2.5 rounded-xl p-3.5">
               <div className="text-sm font-bold text-white/80">{t.settingsLang}</div>
               <div className="mt-2.5 grid grid-cols-2 gap-2" role="radiogroup" aria-label={t.settingsLangAria}>
                 <button
@@ -342,8 +349,8 @@ export default function MenuScreen({
                   onClick={() => onSetLang("ru")}
                   className={`rounded-xl py-2.5 text-sm font-black transition active:scale-95 ${
                     lang === "ru"
-                      ? "bg-gradient-to-b from-amber-400 to-orange-500 text-[#221a08] shadow-md"
-                      : "border border-white/10 bg-white/5 text-white/60"
+                      ? "btn-gold"
+                      : "btn-glass text-white/60"
                   }`}
                 >
                   Русский
@@ -355,8 +362,8 @@ export default function MenuScreen({
                   onClick={() => onSetLang("en")}
                   className={`rounded-xl py-2.5 text-sm font-black transition active:scale-95 ${
                     lang === "en"
-                      ? "bg-gradient-to-b from-amber-400 to-orange-500 text-[#221a08] shadow-md"
-                      : "border border-white/10 bg-white/5 text-white/60"
+                      ? "btn-gold"
+                      : "btn-glass text-white/60"
                   }`}
                 >
                   English

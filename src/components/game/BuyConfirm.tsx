@@ -26,10 +26,10 @@ export default function BuyConfirm({ lang, name, price, count, tone, icon, onCon
       aria-modal="true"
       aria-label={t.confirmBuyText(name, price)}
     >
-      <div className="w-[86%] max-w-xs rounded-2xl border border-white/10 bg-[#1c1a24] p-5 text-center shadow-2xl">
+      <div className="panel tip-pop w-[86%] max-w-xs rounded-2xl p-5 text-center">
         <div className="flex items-center justify-center gap-4">
           <span className="relative shrink-0">
-            <span className={`grid size-12 place-items-center rounded-lg ${tone}`}>{icon}</span>
+            <span className={`grid size-12 place-items-center rounded-lg shadow-[inset_0_2px_0_rgba(255,255,255,0.35),0_8px_16px_rgba(0,0,0,0.45)] ${tone}`}>{icon}</span>
             <span
               className="absolute -right-2 -top-1.5 grid min-w-5 place-items-center rounded-full bg-white px-1 text-[10px] font-black text-black"
               aria-label={t.have(count)}
@@ -49,14 +49,14 @@ export default function BuyConfirm({ lang, name, price, count, tone, icon, onCon
         <button
           type="button"
           onClick={onConfirm}
-          className="mt-5 w-full rounded-xl bg-gradient-to-b from-amber-400 to-orange-500 py-3 text-sm font-black text-[#221a08] shadow-lg shadow-orange-950/50 transition active:scale-95"
+          className="btn-gold mt-5 w-full rounded-xl py-3 text-sm font-black"
         >
           {t.buy}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-bold text-white/70 transition active:scale-95 hover:bg-white/10"
+          className="btn-glass mt-2 w-full rounded-xl py-2.5 text-sm font-bold text-white/70"
         >
           {t.cancel}
         </button>

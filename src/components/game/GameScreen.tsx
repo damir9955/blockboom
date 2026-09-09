@@ -341,13 +341,15 @@ function TipOverlay({ lang, kind, onDismiss }: { lang: Lang; kind: TipKind; onDi
   const { Icon } = cfg;
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label={t.tipAria}
+      className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm"
     >
-      <div className="tip-pop w-[86%] max-w-xs rounded-2xl border border-white/10 bg-[#1c1a24] p-5 text-center shadow-2xl">
-        <span className={`mx-auto grid size-14 place-items-center rounded-2xl shadow-lg shadow-black/40 ${cfg.iconCls}`}>
+      <div className="panel tip-pop w-[86%] max-w-xs rounded-2xl p-5 text-center">
+        <span
+          className={`mx-auto grid size-14 place-items-center rounded-2xl shadow-[inset_0_2px_0_rgba(255,255,255,0.4),0_10px_20px_rgba(0,0,0,0.5)] ${cfg.iconCls}`}
+        >
           <Icon className="size-7 text-white" aria-hidden="true" />
         </span>
         <div className="mt-3 text-xl font-black text-white">{cfg.title}</div>
@@ -362,7 +364,7 @@ function TipOverlay({ lang, kind, onDismiss }: { lang: Lang; kind: TipKind; onDi
         <button
           type="button"
           onClick={onDismiss}
-          className="mt-5 w-full rounded-xl bg-gradient-to-b from-amber-400 to-orange-500 py-3 text-base font-black text-[#221a08] shadow-lg shadow-orange-950/50 transition active:scale-95"
+          className="btn-gold mt-5 w-full rounded-xl py-3 text-base font-black"
         >
           {cfg.btn}
         </button>
@@ -1385,15 +1387,20 @@ export default function GameScreen({
   };
 
   return (
-    <div className="flex min-h-[100dvh] w-full flex-col items-center bg-[#131118] bg-gradient-to-b from-[#1a1723] via-[#141219] to-[#0f0e14] text-white select-none">
-      <main className="flex w-full max-w-[420px] flex-1 flex-col px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-[max(env(safe-area-inset-top),12px)]">
-        {/* Верхняя панель: выход, жизни, монеты, звук */}
+    <div className="relative flex min-h-[100dvh] w-full flex-col items-center bg-[#131118] bg-gradient-to-b from-[#1d1828] via-[#141219] to-[#0f0e14] text-white select-none">
+      {/* атмосферный свет фона */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute inset-x-[-40%] top-[-30%] h-[55%] bg-[radial-gradient(ellipse_at_center,rgba(126,119,255,0.10),transparent_65%)]" />
+        <div className="absolute inset-x-[-25%] bottom-[-20%] h-[45%] bg-[radial-gradient(ellipse_at_center,rgba(251,191,36,0.07),transparent_65%)]" />
+      </div>
+      <main className="relative flex w-full max-w-[420px] flex-1 flex-col px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-[max(env(safe-area-inset-top),12px)]">
+        {/* Верхняя панель: выход, жизни, монеты, звук — стеклянные чипы */}
         <div className="flex items-center justify-between gap-2 pb-1">
           <button
             type="button"
             onClick={onExit}
             aria-label={mode === "endless" ? t.backToMenuAria : t.exitAria}
-            className="rounded-xl border border-white/10 bg-white/5 p-2.5 text-white/70 transition active:scale-90 hover:bg-white/10"
+            className="chip rounded-xl p-2.5 text-white/70 transition active:scale-90"
           >
             <ArrowLeft className="size-4" aria-hidden="true" />
           </button>
@@ -1402,7 +1409,7 @@ export default function GameScreen({
               <Heart
                 key={i}
                 aria-hidden="true"
-                className={`size-5 ${i < lives ? "text-rose-500" : "text-white/15"}`}
+                className={`size-5 ${i < lives ? "text-rose-500 drop-shadow-[0_2px_5px_rgba(0,0,0,0.5)]" : "text-white/15"}`}
                 fill={i < lives ? "currentColor" : "none"}
               />
             ))}
@@ -1412,7 +1419,7 @@ export default function GameScreen({
               type="button"
               onClick={() => setCoinsOpen(true)}
               aria-label={t.coinsOpenAria}
-              className="flex items-center gap-1.5 rounded-xl border border-amber-400/25 bg-amber-400/10 px-2.5 py-2 text-sm font-black text-amber-300 tabular-nums transition active:scale-90 hover:bg-amber-400/20"
+              className="chip flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-sm font-black text-amber-300 tabular-nums transition active:scale-90"
             >
               <Coins className="size-4" aria-hidden="true" />
               <span key={coins} className="score-pop">
@@ -1423,7 +1430,7 @@ export default function GameScreen({
               type="button"
               onClick={onToggleMute}
               aria-label={muted ? t.soundOnAria : t.soundOffAria}
-              className="rounded-xl border border-white/10 bg-white/5 p-2.5 text-white/70 transition active:scale-90 hover:bg-white/10"
+              className="chip rounded-xl p-2.5 text-white/70 transition active:scale-90"
             >
               {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
             </button>
@@ -1459,7 +1466,7 @@ export default function GameScreen({
           </div>
         )}
 
-        {/* Задачи */}
+        {/* Задачи: стеклянные чипы с прогресс-полосой */}
         {goals.length > 0 && (
           <div
             className="flex flex-wrap items-center justify-center gap-2.5 pb-2"
@@ -1467,37 +1474,53 @@ export default function GameScreen({
             aria-label={t.goalsAria}
           >
             {goals.map((gl, i) => {
-              const swatch =
-                gl.goal.type === "collect" && gl.goal.color ? BLOCK_COLORS[gl.goal.color - 1]?.top : undefined;
+              const goalColorIdx = gl.goal.type === "collect" ? gl.goal.color : undefined;
+              const swatch = goalColorIdx ? BLOCK_COLORS[goalColorIdx - 1]?.top : undefined;
+              const swatchBottom = goalColorIdx ? BLOCK_COLORS[goalColorIdx - 1]?.bottom : undefined;
+              const pct = Math.max(0, Math.min(100, (gl.now / gl.target) * 100));
               return (
                 <div
                   key={`${i}-${gl.label}`}
-                  className={`flex items-center gap-2.5 rounded-xl border px-4 py-2.5 text-base font-black ${
+                  className={`relative flex items-center gap-2.5 overflow-hidden rounded-xl border px-4 py-2.5 text-base font-black ${
                     gl.done
-                      ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
-                      : "border-white/10 bg-white/5 text-white/85"
+                      ? "border-emerald-400/50 bg-gradient-to-b from-emerald-500/25 to-emerald-500/10 text-emerald-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_6px_14px_rgba(0,0,0,0.35)]"
+                      : "border-white/14 bg-gradient-to-b from-white/12 to-white/4 text-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_6px_14px_rgba(0,0,0,0.35)]"
                   } ${goalsFlash ? "goal-flash" : ""}`}
                   style={goalsFlash ? { animationDelay: `${0.15 * i}s` } : undefined}
                   aria-label={t.goalAria(gl.label, gl.now, gl.target)}
                 >
                   {swatch ? (
                     <span
-                      className="inline-block size-5 shrink-0 rounded-[5px] shadow-sm"
-                      style={{ background: swatch }}
+                      className="inline-block size-5 shrink-0 rounded-[6px] border border-white/25 shadow-[inset_0_1.5px_0_rgba(255,255,255,0.55),0_2px_4px_rgba(0,0,0,0.45)]"
+                      style={{ background: `linear-gradient(180deg, ${swatch}, ${swatchBottom ?? swatch})` }}
                       aria-hidden="true"
                     />
                   ) : gl.goal.type === "defuse" ? (
-                    <Bomb className="size-6 shrink-0 text-rose-400" aria-hidden="true" />
+                    <Bomb className="size-6 shrink-0 text-rose-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]" aria-hidden="true" />
                   ) : gl.goal.type === "score" ? (
-                    <Star className="size-6 shrink-0 text-amber-400" aria-hidden="true" />
+                    <Star className="size-6 shrink-0 text-amber-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]" aria-hidden="true" />
                   ) : gl.goal.type === "stones" ? (
-                    <Mountain className="size-6 shrink-0 text-stone-300" aria-hidden="true" />
+                    <Mountain className="size-6 shrink-0 text-stone-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]" aria-hidden="true" />
                   ) : (
-                    <Flame className="size-6 shrink-0 text-orange-400" aria-hidden="true" />
+                    <Flame className="size-6 shrink-0 text-orange-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]" aria-hidden="true" />
                   )}
                   <span className="tabular-nums">
                     {gl.label}{" "}
                     <span className={gl.done ? "" : "text-white/50"}>{gl.now}</span>/{gl.target}
+                  </span>
+                  {/* прогресс-полоса */}
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-x-2 bottom-1 h-1 overflow-hidden rounded-full bg-black/35"
+                  >
+                    <span
+                      className={`block h-full rounded-full transition-[width] duration-500 ${
+                        gl.done
+                          ? "bg-gradient-to-r from-emerald-300 to-emerald-500"
+                          : "bg-gradient-to-r from-amber-300 to-orange-500"
+                      }`}
+                      style={{ width: `${pct}%` }}
+                    />
                   </span>
                 </div>
               );
@@ -1529,7 +1552,7 @@ export default function GameScreen({
           )}
           {streak >= 2 && (
             <div
-              className="mb-1 flex items-center gap-1.5 rounded-full border border-orange-500/30 bg-orange-500/15 px-3 py-1.5 text-xs font-bold text-orange-300"
+              className="chip mb-1 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold text-orange-300"
               role="status"
             >
               <Flame className="size-4" aria-hidden="true" />
@@ -1538,7 +1561,10 @@ export default function GameScreen({
           )}
           <div className="text-right">
             <div className="text-[11px] uppercase tracking-widest text-white/35">{t.score}</div>
-            <div key={score} className="score-pop text-2xl font-black leading-none text-amber-300 tabular-nums">
+            <div
+              key={score}
+              className="score-pop bg-gradient-to-b from-white via-amber-200 to-amber-400 bg-clip-text text-2xl font-black leading-none text-transparent tabular-nums drop-shadow-[0_2px_6px_rgba(251,191,36,0.25)]"
+            >
               {score}
             </div>
           </div>
@@ -1559,7 +1585,7 @@ export default function GameScreen({
 
           {showOverlay && phase === "won" && mode === "classic" && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-              <div className="w-[86%] max-w-xs rounded-2xl border border-amber-400/20 bg-[#1c1a24] p-6 text-center shadow-2xl">
+              <div className="panel w-[86%] max-w-xs rounded-2xl border-amber-400/25 p-6 text-center">
                 <div className="text-xs uppercase tracking-widest text-white/40">
                   {t.levelComplete(level ? level.n : 0)}
                 </div>
@@ -1568,13 +1594,13 @@ export default function GameScreen({
                     <Star
                       key={`${i}-${result?.stars}`}
                       aria-hidden="true"
-                      className={`size-10 star-pop ${i < (result?.stars ?? 0) ? "text-amber-400" : "text-white/15"}`}
+                      className={`size-10 star-pop ${i < (result?.stars ?? 0) ? "text-amber-400 drop-shadow-[0_4px_10px_rgba(251,191,36,0.45)]" : "text-white/15"}`}
                       fill={i < (result?.stars ?? 0) ? "currentColor" : "none"}
                       style={{ animationDelay: `${i * 0.22}s` }}
                     />
                   ))}
                 </div>
-                <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/15 px-3 py-1 text-xs font-bold text-amber-300">
+                <div className="chip mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold text-amber-300">
                   <Coins className="size-3.5" aria-hidden="true" />
                   {t.coinsReward(result?.coins ?? 0)}
                 </div>
@@ -1582,7 +1608,7 @@ export default function GameScreen({
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="mt-5 w-full rounded-xl bg-gradient-to-b from-amber-400 to-orange-500 py-3 text-base font-black text-[#221a08] shadow-lg shadow-orange-950/50 transition active:scale-95"
+                  className="btn-gold mt-5 w-full rounded-xl py-3 text-base font-black"
                 >
                   {t.nextLevel}
                 </button>
@@ -1592,7 +1618,7 @@ export default function GameScreen({
                       type="button"
                       onClick={restart}
                       aria-label={t.retryImprove}
-                      className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-amber-400/30 bg-amber-400/10 py-2 text-sm font-bold text-amber-300 transition active:scale-95 hover:bg-amber-400/20"
+                      className="chip flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-sm font-bold text-amber-300 transition active:scale-95"
                     >
                       <RotateCcw className="size-4" aria-hidden="true" />
                       {t.retryImprove}
@@ -1600,7 +1626,7 @@ export default function GameScreen({
                     <button
                       type="button"
                       onClick={handleToMap}
-                      className="flex-1 rounded-xl border border-white/10 bg-white/5 py-2 text-sm font-bold text-white/70 transition active:scale-95 hover:bg-white/10"
+                      className="btn-glass flex-1 rounded-xl py-2 text-sm font-bold text-white/70"
                     >
                       {t.toMap}
                     </button>
@@ -1609,7 +1635,7 @@ export default function GameScreen({
                   <button
                     type="button"
                     onClick={handleToMap}
-                    className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-bold text-white/70 transition active:scale-95 hover:bg-white/10"
+                    className="btn-glass mt-2 w-full rounded-xl py-2.5 text-sm font-bold text-white/70"
                   >
                     {t.toMap}
                   </button>
@@ -1621,19 +1647,21 @@ export default function GameScreen({
           {/* Endless: итоги — счёт и рекорд */}
           {showOverlay && phase === "lost" && mode === "endless" && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-              <div className="w-[86%] max-w-xs rounded-2xl border border-sky-400/20 bg-[#1c1a24] p-6 text-center shadow-2xl">
+              <div className="panel w-[86%] max-w-xs rounded-2xl border-sky-400/25 p-6 text-center">
                 <div className="text-xs uppercase tracking-widest text-sky-300/70">{t.endlessOver}</div>
                 <div className="mt-2 text-xl font-black text-white">
                   {loseReason === "moves" ? t.loseMoves : loseReason === "bombs" ? t.loseBombs : t.loseStall}
                 </div>
                 <div className="mt-2 text-xs font-bold text-white/45">{t.endlessSetsDone(endlessSet.n - 1)}</div>
-                <div className="mt-3 text-5xl font-black leading-none text-amber-300 tabular-nums">{score}</div>
+                <div className="score-pop mt-3 bg-gradient-to-b from-white via-amber-200 to-amber-400 bg-clip-text text-5xl font-black leading-none text-transparent tabular-nums drop-shadow-[0_4px_12px_rgba(251,191,36,0.3)]">
+                  {score}
+                </div>
                 <div className="mt-3 text-xs text-white/40">
                   {t.endlessBest}:{" "}
                   <span className="font-black text-sky-300">{Math.max(best, score)}</span>
                 </div>
                 {isRecord && (
-                  <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/15 px-3 py-1 text-xs font-black text-amber-300">
+                  <div className="chip mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-black text-amber-300">
                     <Star className="size-3.5" fill="currentColor" aria-hidden="true" />
                     {t.endlessNewRecord}
                   </div>
@@ -1642,7 +1670,7 @@ export default function GameScreen({
                 <button
                   type="button"
                   onClick={restart}
-                  className="mt-5 w-full rounded-xl bg-gradient-to-b from-amber-400 to-orange-500 py-3 text-base font-black text-[#221a08] shadow-lg shadow-orange-950/50 transition active:scale-95"
+                  className="btn-gold mt-5 w-full rounded-xl py-3 text-base font-black"
                 >
                   <span className="inline-flex items-center justify-center gap-2">
                     <RotateCcw className="size-4" aria-hidden="true" />
@@ -1652,7 +1680,7 @@ export default function GameScreen({
                 <button
                   type="button"
                   onClick={onExit}
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-bold text-white/70 transition active:scale-95 hover:bg-white/10"
+                  className="btn-glass mt-2 w-full rounded-xl py-2.5 text-sm font-bold text-white/70"
                 >
                   {t.endlessToMenu}
                 </button>
@@ -1662,7 +1690,7 @@ export default function GameScreen({
 
           {showOverlay && phase === "lost" && mode === "classic" && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-              <div className="w-[86%] max-w-xs rounded-2xl border border-white/10 bg-[#1c1a24] p-6 text-center shadow-2xl">
+              <div className="panel w-[86%] max-w-xs rounded-2xl border-rose-400/20 p-6 text-center">
                 <div className="text-xs uppercase tracking-widest text-rose-300/70">
                   {t.levelFailed(level ? level.n : 0)}
                 </div>
@@ -1677,7 +1705,7 @@ export default function GameScreen({
                 <button
                   type="button"
                   onClick={restart}
-                  className="mt-5 w-full rounded-xl bg-gradient-to-b from-amber-400 to-orange-500 py-3 text-base font-black text-[#221a08] shadow-lg shadow-orange-950/50 transition active:scale-95"
+                  className="btn-gold mt-5 w-full rounded-xl py-3 text-base font-black"
                 >
                   <span className="inline-flex items-center justify-center gap-2">
                     <RotateCcw className="size-4" aria-hidden="true" />
@@ -1687,7 +1715,7 @@ export default function GameScreen({
                 <button
                   type="button"
                   onClick={handleRetryToMap}
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-bold text-white/70 transition active:scale-95 hover:bg-white/10"
+                  className="btn-glass mt-2 w-full rounded-xl py-2.5 text-sm font-bold text-white/70"
                 >
                   {t.toMap}
                 </button>
@@ -1696,7 +1724,7 @@ export default function GameScreen({
           )}
         </div>
 
-        {/* Бустеры: в endless — два (молоток и микс), в классике — три */}
+        {/* Бустеры: сочные 3D-кнопки с прожимом; в endless — два (молоток и микс), в классике — три */}
         <div className={`mt-3 grid gap-2.5 ${mode === "endless" ? "grid-cols-2" : "grid-cols-3"}`}>
           <button
             type="button"
@@ -1705,22 +1733,20 @@ export default function GameScreen({
             aria-label={
               boosters.hammer > 0 ? t.hammerAria(boosters.hammer) : t.buyAria(t.hammer, PRICES.hammer, 0)
             }
-            className={`relative flex flex-col items-center justify-center gap-1 rounded-2xl border py-3 text-xs font-black transition active:scale-95 disabled:opacity-35 ${
-              armed
-                ? "border-rose-300/70 bg-gradient-to-b from-rose-500/40 to-rose-500/10 text-rose-200 shadow-lg shadow-rose-950/40 ring-2 ring-rose-400/40"
-                : "border-rose-400/30 bg-gradient-to-b from-rose-500/15 to-rose-500/5 text-rose-200/90 hover:from-rose-500/25"
+            className={`btn-rose relative flex flex-col items-center justify-center gap-1 rounded-2xl py-3 text-xs font-black text-white ${
+              armed ? "ring-2 ring-rose-300/60 ring-offset-2 ring-offset-[#141219] brightness-110" : ""
             }`}
           >
             <span className="flex items-center gap-1.5">
-              <Hammer className="size-5" aria-hidden="true" />
+              <Hammer className="size-5 drop-shadow-[0_2px_3px_rgba(0,0,0,0.4)]" aria-hidden="true" />
               {t.hammer}
             </span>
             {boosters.hammer > 0 ? (
-              <span className="absolute -right-1.5 -top-1.5 grid size-6 place-items-center rounded-full bg-rose-500 text-[11px] font-black text-white shadow-md">
+              <span className="absolute -right-1.5 -top-1.5 grid size-6 place-items-center rounded-full bg-white text-[11px] font-black text-rose-700 shadow-md">
                 {boosters.hammer}
               </span>
             ) : (
-              <span className="flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-black text-amber-300 tabular-nums">
+              <span className="flex items-center gap-1 rounded-full bg-black/30 px-2 py-0.5 text-[10px] font-black text-amber-200 tabular-nums">
                 <Coins className="size-3" aria-hidden="true" />
                 {PRICES.hammer}
               </span>
@@ -1733,18 +1759,18 @@ export default function GameScreen({
             aria-label={
               boosters.shuffle > 0 ? t.shuffleAria(boosters.shuffle) : t.buyAria(t.shuffle, PRICES.shuffle, 0)
             }
-            className="relative flex flex-col items-center justify-center gap-1 rounded-2xl border border-teal-400/30 bg-gradient-to-b from-teal-500/15 to-teal-500/5 py-3 text-xs font-black text-teal-200/90 transition active:scale-95 hover:from-teal-500/25 disabled:opacity-35"
+            className="btn-teal relative flex flex-col items-center justify-center gap-1 rounded-2xl py-3 text-xs font-black text-white"
           >
             <span className="flex items-center gap-1.5">
-              <Shuffle className="size-5" aria-hidden="true" />
+              <Shuffle className="size-5 drop-shadow-[0_2px_3px_rgba(0,0,0,0.4)]" aria-hidden="true" />
               {t.shuffle}
             </span>
             {boosters.shuffle > 0 ? (
-              <span className="absolute -right-1.5 -top-1.5 grid size-6 place-items-center rounded-full bg-teal-500 text-[11px] font-black text-white shadow-md">
+              <span className="absolute -right-1.5 -top-1.5 grid size-6 place-items-center rounded-full bg-white text-[11px] font-black text-teal-700 shadow-md">
                 {boosters.shuffle}
               </span>
             ) : (
-              <span className="flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-black text-amber-300 tabular-nums">
+              <span className="flex items-center gap-1 rounded-full bg-black/30 px-2 py-0.5 text-[10px] font-black text-amber-200 tabular-nums">
                 <Coins className="size-3" aria-hidden="true" />
                 {PRICES.shuffle}
               </span>
@@ -1758,18 +1784,18 @@ export default function GameScreen({
               aria-label={
                 boosters.plus5 > 0 ? t.plus5Aria(boosters.plus5) : t.buyAria(`+${t.plus5}`, PRICES.plus5, 0)
               }
-              className="relative flex flex-col items-center justify-center gap-1 rounded-2xl border border-amber-400/30 bg-gradient-to-b from-amber-500/15 to-amber-500/5 py-3 text-xs font-black text-amber-200/90 transition active:scale-95 hover:from-amber-500/25 disabled:opacity-35"
+              className="btn-amber relative flex flex-col items-center justify-center gap-1 rounded-2xl py-3 text-xs font-black text-[#2d1d05]"
             >
               <span className="flex items-center gap-1.5">
-                <Plus className="size-5" aria-hidden="true" />
+                <Plus className="size-5 drop-shadow-[0_2px_3px_rgba(0,0,0,0.3)]" aria-hidden="true" />
                 {t.plus5}
               </span>
               {boosters.plus5 > 0 ? (
-                <span className="absolute -right-1.5 -top-1.5 grid size-6 place-items-center rounded-full bg-amber-500 text-[11px] font-black text-white shadow-md">
+                <span className="absolute -right-1.5 -top-1.5 grid size-6 place-items-center rounded-full bg-white text-[11px] font-black text-amber-700 shadow-md">
                   {boosters.plus5}
                 </span>
               ) : (
-                <span className="flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-black text-amber-300 tabular-nums">
+                <span className="flex items-center gap-1 rounded-full bg-black/30 px-2 py-0.5 text-[10px] font-black text-amber-900 tabular-nums">
                   <Coins className="size-3" aria-hidden="true" />
                   {PRICES.plus5}
                 </span>

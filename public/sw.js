@@ -1,13 +1,15 @@
 /* Блок Бум: service worker — офлайн-режим для PWA/TWA */
-// v2: новая версия кэша — при обновлении старый кэш (v1) удаляется,
+// v3: новые реалистичные иконки и арт-ассеты — при обновлении старые кэши удаляются,
 // чтобы игроки гарантированно получали свежую сборку после деплоя
-const CACHE = "blockboom-v2";
+const CACHE = "blockboom-v3";
 const PRECACHE = [
   "/",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
   "/icons/maskable-512.png",
   "/apple-touch-icon.png",
+  "/art/icon.png",
+  "/art/menu-bg.jpg",
   "/manifest.webmanifest",
 ];
 

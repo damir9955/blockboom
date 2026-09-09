@@ -82,7 +82,7 @@ function StonePic({ stage }: { stage: number }) {
 
 function HelpSection({ title, text, pic }: { title: string; text: string; pic: React.ReactNode }) {
   return (
-    <section className="flex gap-3 rounded-xl border border-white/10 bg-white/5 p-3">
+    <section className="chip flex gap-3 rounded-xl p-3">
       <div className="flex w-[104px] shrink-0 flex-col items-center justify-center gap-1.5">{pic}</div>
       <div className="min-w-0">
         <div className="text-sm font-black text-white">{title}</div>
@@ -284,10 +284,10 @@ export default function HelpModal({ lang, onClose }: { lang: Lang; onClose: () =
       aria-modal="true"
       aria-label={t.helpTitle}
     >
-      <div className="tip-pop flex h-[88dvh] w-[92%] max-w-sm flex-col rounded-2xl border border-white/10 bg-[#1c1a24] shadow-2xl">
+      <div className="panel tip-pop flex h-[88dvh] w-[92%] max-w-sm flex-col rounded-2xl">
         <div className="flex items-center justify-between gap-2 border-b border-white/10 p-4">
           <div className="flex items-center gap-2.5">
-            <span className="grid size-8 place-items-center rounded-lg bg-gradient-to-br from-sky-400 to-indigo-600 shadow-md">
+            <span className="grid size-8 place-items-center rounded-lg bg-gradient-to-b from-sky-400 to-indigo-600 shadow-[inset_0_2px_0_rgba(255,255,255,0.35),0_6px_12px_rgba(0,0,0,0.4)]">
               <Flame className="size-4 text-white" aria-hidden="true" />
             </span>
             <div className="text-base font-black uppercase tracking-widest text-white/80">{t.helpTitle}</div>
@@ -296,7 +296,7 @@ export default function HelpModal({ lang, onClose }: { lang: Lang; onClose: () =
             type="button"
             onClick={onClose}
             aria-label={t.close}
-            className="rounded-xl border border-white/10 bg-white/5 p-2 text-white/60 transition active:scale-90 hover:bg-white/10"
+            className="chip rounded-xl p-2 text-white/60 transition active:scale-90"
           >
             <X className="size-4" />
           </button>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ElementType } from "react";
-import { ArrowLeft, Bomb, Coins, Hammer, Lock, Play, Plus, Shuffle, Star } from "lucide-react";
+import { ArrowLeft, Coins, Hammer, Lock, Play, Plus, Shuffle, Star } from "lucide-react";
 import { tr, type Lang } from "./i18n";
 import { LEVELS, LEVEL_COUNT, levelHint } from "./levels";
 import { PRICES, totalStars, type BoosterKind, type Progress } from "./progress";
@@ -73,8 +73,13 @@ export default function MapScreen({ progress, lang, onStart, onBuy, onMenu, onAd
   const PendingIcon = pendingItem?.Icon;
 
   return (
-    <div className="flex h-[100dvh] w-full flex-col items-center overflow-hidden bg-[#131118] bg-gradient-to-b from-[#1d1828] via-[#141219] to-[#0f0e14] text-white select-none">
-      <main className="flex w-full max-w-[420px] flex-1 flex-col overflow-hidden px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-[max(env(safe-area-inset-top),12px)]">
+    <div className="relative flex h-[100dvh] w-full flex-col items-center overflow-hidden bg-[#131118] bg-gradient-to-b from-[#1d1828] via-[#141219] to-[#0f0e14] text-white select-none">
+      {/* атмосферный свет */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute inset-x-[-40%] top-[-25%] h-[50%] bg-[radial-gradient(ellipse_at_center,rgba(251,191,36,0.08),transparent_65%)]" />
+        <div className="absolute inset-x-[-30%] bottom-[-25%] h-[50%] bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.10),transparent_65%)]" />
+      </div>
+      <main className="relative flex w-full max-w-[420px] flex-1 flex-col overflow-hidden px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-[max(env(safe-area-inset-top),12px)]">
         {/* Шапка */}
         <header className="flex items-center justify-between gap-3 pb-3">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -82,13 +87,17 @@ export default function MapScreen({ progress, lang, onStart, onBuy, onMenu, onAd
               type="button"
               onClick={onMenu}
               aria-label={t.backToMenuAria}
-              className="shrink-0 rounded-xl border border-white/10 bg-white/5 p-2.5 text-white/70 transition active:scale-90 hover:bg-white/10"
+              className="chip shrink-0 rounded-xl p-2.5 text-white/70 transition active:scale-90"
             >
               <ArrowLeft className="size-4" aria-hidden="true" />
             </button>
-            <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 shadow-lg shadow-orange-950/40">
-              <Bomb className="size-5 text-white" aria-hidden="true" />
-            </div>
+            {/* логотип-иконка */}
+            <img
+              src="/art/icon.png"
+              alt=""
+              aria-hidden="true"
+              className="size-10 shrink-0 -rotate-3 rounded-xl border border-white/20 shadow-[0_8px_18px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.3)]"
+            />
             <div className="min-w-0">
               <div className="truncate text-lg font-black leading-none tracking-wide">{t.appName}</div>
               <div className="mt-1 flex items-center gap-1 text-[11px] leading-none text-white/40">
@@ -101,7 +110,7 @@ export default function MapScreen({ progress, lang, onStart, onBuy, onMenu, onAd
             type="button"
             onClick={() => setCoinsOpen(true)}
             aria-label={t.coinsOpenAria}
-            className="flex shrink-0 items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-sm font-black text-amber-300 tabular-nums transition active:scale-90 hover:bg-amber-400/20"
+            className="chip flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-black text-amber-300 tabular-nums transition active:scale-90"
           >
             <Coins className="size-4" aria-hidden="true" />
             {progress.coins}
@@ -111,7 +120,7 @@ export default function MapScreen({ progress, lang, onStart, onBuy, onMenu, onAd
         {/* Тропа уровней */}
         <div
           ref={scrollRef}
-          className="relative min-h-0 flex-1 overflow-y-auto rounded-2xl border border-white/5 bg-black/20 [scrollbar-width:thin]"
+          className="relative min-h-0 flex-1 overflow-y-auto rounded-2xl border border-white/8 bg-black/25 shadow-[inset_0_2px_10px_rgba(0,0,0,0.45)] [scrollbar-width:thin]"
           role="list"
           aria-label={t.levelMapAria}
         >
@@ -122,11 +131,27 @@ export default function MapScreen({ progress, lang, onStart, onBuy, onMenu, onAd
               preserveAspectRatio="none"
               aria-hidden="true"
             >
+              <defs>
+                <linearGradient id="path-glow" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.35" />
+                  <stop offset="100%" stopColor="#fbbf24" stopOpacity="0.08" />
+                </linearGradient>
+              </defs>
               <path
                 d={pathD}
                 fill="none"
-                stroke="#2c2838"
-                strokeWidth="3.2"
+                stroke="url(#path-glow)"
+                strokeWidth="6.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeDasharray="0.2 3.4"
+                vectorEffect="non-scaling-stroke"
+              />
+              <path
+                d={pathD}
+                fill="none"
+                stroke="#d9a53c"
+                strokeWidth="2.6"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeDasharray="0.2 3.4"
@@ -155,12 +180,12 @@ export default function MapScreen({ progress, lang, onStart, onBuy, onMenu, onAd
                   style={{ left: `${p.x}%`, top: p.y }}
                 >
                   <span
-                    className={`grid place-items-center rounded-full border-2 font-black shadow-lg transition active:scale-90 ${
+                    className={`grid place-items-center rounded-full border-2 font-black transition active:scale-90 ${
                       locked
-                        ? "size-14 border-white/8 bg-[#1c1926] text-white/25"
+                        ? "size-14 border-white/10 bg-[#1c1926] text-white/25 shadow-[inset_0_2px_6px_rgba(0,0,0,0.5)]"
                         : done
-                          ? "size-16 border-emerald-500/40 bg-gradient-to-b from-emerald-500 to-emerald-700 text-white"
-                          : "size-20 border-amber-300/70 bg-gradient-to-b from-amber-400 to-orange-600 text-white shadow-amber-900/50 node-pulse"
+                          ? "size-16 border-emerald-300/60 bg-gradient-to-b from-emerald-400 to-emerald-700 text-white shadow-[inset_0_3px_0_rgba(255,255,255,0.45),inset_0_-4px_8px_rgba(0,0,0,0.35),0_10px_20px_rgba(0,0,0,0.45)]"
+                          : "size-20 border-amber-200/80 bg-gradient-to-b from-amber-300 via-amber-400 to-orange-600 text-white shadow-amber-900/50 node-pulse"
                     } ${lockedShake === l.n ? "anim-shake" : ""}`}
                   >
                     {locked ? (
@@ -183,7 +208,7 @@ export default function MapScreen({ progress, lang, onStart, onBuy, onMenu, onAd
                     </span>
                   )}
                   {isCurrent && (
-                    <span className="absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-full border border-amber-400/30 bg-amber-400/15 px-3 py-1 text-[11px] font-bold text-amber-300">
+                    <span className="chip absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-bold text-amber-300">
                       {t.levelNChip(l.n)}
                     </span>
                   )}
@@ -204,13 +229,13 @@ export default function MapScreen({ progress, lang, onStart, onBuy, onMenu, onAd
                   type="button"
                   onClick={() => (afford ? setPendingKind(kind) : setCoinsOpen(true))}
                   aria-label={t.buyAria(label, price, count)}
-                  className="flex flex-col items-center gap-1 rounded-xl border border-white/10 bg-white/5 px-2 py-2.5 transition active:scale-95 hover:bg-white/10 aria-disabled:opacity-40"
+                  className="chip flex flex-col items-center gap-1 rounded-xl px-2 py-2.5 transition active:scale-95 aria-disabled:opacity-40"
                 >
                   <span className="relative">
-                    <span className={`grid size-9 place-items-center rounded-lg ${tone}`}>
+                    <span className={`grid size-9 place-items-center rounded-lg shadow-[inset_0_2px_0_rgba(255,255,255,0.35),0_6px_12px_rgba(0,0,0,0.45)] ${tone}`}>
                       <Icon className="size-5 text-white" aria-hidden="true" />
                     </span>
-                    <span className="absolute -right-2 -top-1.5 grid min-w-5 place-items-center rounded-full bg-white px-1 text-[10px] font-black text-black">
+                    <span className="absolute -right-2 -top-1.5 grid min-w-5 place-items-center rounded-full bg-white px-1 text-[10px] font-black text-black shadow-md">
                       {count}
                     </span>
                   </span>

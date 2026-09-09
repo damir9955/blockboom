@@ -75,7 +75,7 @@ export default function CoinsPanel({ lang, coins, reward, onAdReward, onClose }:
           role="status"
           aria-live="polite"
         >
-          <div className="rounded-2xl border border-white/10 bg-[#1c1a24] px-6 py-4 text-sm font-bold text-white/80 shadow-2xl">
+          <div className="panel rounded-2xl px-6 py-4 text-sm font-bold text-white/80">
             {t.adLoading}
           </div>
         </div>
@@ -91,20 +91,20 @@ export default function CoinsPanel({ lang, coins, reward, onAdReward, onClose }:
       aria-modal="true"
       aria-label={t.coinsTitle}
     >
-      <div className="tip-pop w-[86%] max-w-xs rounded-2xl border border-amber-400/25 bg-[#1c1a24] p-5 text-center shadow-2xl">
+      <div className="panel tip-pop w-[86%] max-w-xs rounded-2xl border-amber-400/25 p-5 text-center">
         <div className="flex items-center justify-between gap-2">
           <div className="text-sm font-black uppercase tracking-widest text-white/70">{t.coinsTitle}</div>
           <button
             type="button"
             onClick={onClose}
             aria-label={t.close}
-            className="rounded-xl border border-white/10 bg-white/5 p-2 text-white/60 transition active:scale-90 hover:bg-white/10"
+            className="chip rounded-xl p-2 text-white/60 transition active:scale-90"
           >
             <X className="size-4" />
           </button>
         </div>
         <div className="mt-4 flex items-center justify-center gap-3">
-          <span className="grid size-14 place-items-center rounded-full bg-gradient-to-b from-amber-300 to-orange-500 shadow-lg shadow-orange-950/50">
+          <span className="grid size-14 place-items-center rounded-full bg-gradient-to-b from-amber-300 to-orange-500 shadow-[inset_0_2px_0_rgba(255,255,255,0.55),0_10px_20px_rgba(120,53,15,0.5)]">
             <Coins className="size-7 text-[#221a08]" aria-hidden="true" />
           </span>
           <div className="text-left">
@@ -124,11 +124,11 @@ export default function CoinsPanel({ lang, coins, reward, onAdReward, onClose }:
           type="button"
           onClick={ad.start}
           aria-label={t.topUpAria(reward)}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-teal-400/40 bg-gradient-to-b from-teal-500/25 to-teal-500/10 py-3 text-sm font-black text-teal-300 transition active:scale-95 hover:bg-teal-500/30"
+          className="btn-teal mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-black text-white"
         >
           <Video className="size-4" aria-hidden="true" />
           {t.topUp(reward)}
-          <span className="text-[11px] font-bold text-teal-300/60">{t.topUpNote}</span>
+          <span className="text-[11px] font-bold text-white/60">{t.topUpNote}</span>
         </button>
       </div>
     </div>
@@ -175,7 +175,7 @@ export function ToolPanel({
           role="status"
           aria-live="polite"
         >
-          <div className="rounded-2xl border border-white/10 bg-[#1c1a24] px-6 py-4 text-sm font-bold text-white/80 shadow-2xl">
+          <div className="panel rounded-2xl px-6 py-4 text-sm font-bold text-white/80">
             {t.adLoading}
           </div>
         </div>
@@ -191,11 +191,11 @@ export function ToolPanel({
       aria-modal="true"
       aria-label={t.toolPanelAria(label)}
     >
-      <div className="tip-pop w-[86%] max-w-xs rounded-2xl border border-white/10 bg-[#1c1a24] p-5 shadow-2xl">
+      <div className="panel tip-pop w-[86%] max-w-xs rounded-2xl p-5">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <span className="relative shrink-0">
-              <span className={`grid size-12 place-items-center rounded-xl ${tone}`}>
+              <span className={`grid size-12 place-items-center rounded-xl shadow-[inset_0_2px_0_rgba(255,255,255,0.35),0_8px_16px_rgba(0,0,0,0.45)] ${tone}`}>
                 <Icon className="size-6 text-white" aria-hidden="true" />
               </span>
               <span
@@ -217,7 +217,7 @@ export function ToolPanel({
             type="button"
             onClick={onClose}
             aria-label={t.close}
-            className="rounded-xl border border-white/10 bg-white/5 p-2 text-white/60 transition active:scale-90 hover:bg-white/10"
+            className="chip rounded-xl p-2 text-white/60 transition active:scale-90"
           >
             <X className="size-4" />
           </button>
@@ -242,7 +242,7 @@ export function ToolPanel({
           onClick={onBuy}
           disabled={!affordable}
           aria-label={t.buyAria(label, price, count)}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-amber-400 to-orange-500 py-3 text-sm font-black text-[#221a08] shadow-lg shadow-orange-950/40 transition active:scale-95 disabled:opacity-40"
+          className="btn-gold mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-black disabled:opacity-40 disabled:saturate-50"
         >
           <Coins className="size-4" aria-hidden="true" />
           {t.buy}
@@ -252,11 +252,11 @@ export function ToolPanel({
           type="button"
           onClick={ad.start}
           aria-label={t.topUpAria(reward)}
-          className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-teal-400/40 bg-gradient-to-b from-teal-500/25 to-teal-500/10 py-3 text-sm font-black text-teal-300 transition active:scale-95 hover:bg-teal-500/30"
+          className="btn-teal mt-2 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-black text-white"
         >
           <Video className="size-4" aria-hidden="true" />
           {t.topUp(reward)}
-          <span className="text-[11px] font-bold text-teal-300/60">{t.topUpNote}</span>
+          <span className="text-[11px] font-bold text-white/60">{t.topUpNote}</span>
         </button>
       </div>
     </div>
