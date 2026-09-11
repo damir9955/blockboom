@@ -106,8 +106,9 @@ export default function MenuScreen({
           className="absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: "url('/art/menu-bg.jpg')" }}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#171325]/70 via-[#141219]/80 to-[#0d0b12]/95" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#14101f]/80 via-[#120f18]/85 to-[#0d0b12]/95" />
         <div className="absolute inset-x-[-30%] top-[-18%] h-[62%] bg-[radial-gradient(ellipse_at_center,rgba(251,191,36,0.14),transparent_65%)]" />
+        <div className="absolute inset-x-[-25%] top-[-10%] h-[46%] bg-[radial-gradient(ellipse_at_center,rgba(13,11,18,0.6),transparent_70%)]" />
         <div className="absolute inset-x-[-20%] bottom-[-25%] h-[55%] bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.14),transparent_65%)]" />
         {FLOAT_BLOCKS.map((b, i) => (
           <span key={i} className={`float-block absolute ${b.cls}`} style={b.style} />

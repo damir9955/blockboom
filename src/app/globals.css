@@ -252,13 +252,15 @@
     0 5px 10px rgba(0, 0, 0, 0.4);
 }
 
-/* Логотип: «объёмный» градиентный текст */
+/* Логотип: «объёмный» градиентный текст — плотная тень-обводка,
+   чтобы заголовок читался поверх светлого взрыва на фоне меню */
 .logo-3d {
   background: linear-gradient(180deg, #ffffff 12%, #ffe9a3 42%, #ffc23d 72%, #f98a0c 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  filter: drop-shadow(0 2px 0 rgba(122, 63, 0, 0.6)) drop-shadow(0 12px 26px rgba(251, 191, 36, 0.38));
+  filter: drop-shadow(0 1px 1px rgba(46, 18, 0, 0.9)) drop-shadow(0 3px 0 rgba(46, 18, 0, 0.75))
+    drop-shadow(0 2px 0 rgba(122, 63, 0, 0.6)) drop-shadow(0 14px 30px rgba(0, 0, 0, 0.65));
   letter-spacing: 0.02em;
 }
 
