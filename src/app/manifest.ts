@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
+    id: "/",
     name: "Block Boom — Blast Block Puzzle",
     short_name: "Block Boom",
     description:
@@ -15,8 +16,10 @@ export default function manifest(): MetadataRoute.Manifest {
     lang: "en",
     categories: ["games", "puzzle"],
     icons: [
-      { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      // "any" — обычная иконка (магазин/справка), "maskable" — с безопасными
+      // полями под адаптивные маски Android (доска не обрезается)
+      { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
       { src: "/icons/maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
