@@ -20,3 +20,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 *.log
+
+# Сгенерировано сборкой (список файлов для полного офлайн-кача)
+public/precache-manifest.json

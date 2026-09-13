@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import GameScreen, { type GameMode, type LevelResult } from "@/components/game/GameScreen";
 import MapScreen from "@/components/game/MapScreen";
 import MenuScreen from "@/components/game/MenuScreen";
+import BootScreen from "@/components/game/BootScreen";
 import { LEVELS } from "@/components/game/levels";
 import { detectLang, saveLang, type Lang } from "@/components/game/i18n";
 import {
@@ -33,6 +34,9 @@ export default function Home() {
   const [gameKey, setGameKey] = useState(0);
   const [progress, setProgress] = useState<Progress>({ ...START_PROGRESS });
   const [lang, setLang] = useState<Lang>("ru");
+  // До старта игры — экран полной загрузки (первый запуск скачивает всё,
+  // повторный с файлом-маркером пропускает его мгновенно)
+  const [booted, setBooted] = useState(false);
   const progressRef = useRef<Progress>(progress);
 
   // Загрузка прогресса и языка из localStorage (отложенно — внешние данные)
@@ -146,6 +150,10 @@ export default function Home() {
   };
 
   const level = mode === "endless" ? null : LEVELS[levelN - 1];
+
+  if (!booted) {
+    return <BootScreen onReady={() => setBooted(true)} />;
+  }
 
   return (
     <>

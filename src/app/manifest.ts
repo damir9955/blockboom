@@ -15,12 +15,14 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#141219",
     lang: "en",
     categories: ["games", "puzzle"],
+    // «any maskable» — два purpose через пробел по спеке W3C Web App Manifest
+    // (одна иконка годится и для обычного показа, и под маску Android);
+    // тип Next про комбинированное значение просто не знает — потому cast
     icons: [
-      // "any" — обычная иконка (магазин/справка), "maskable" — с безопасными
-      // полями под адаптивные маски Android (доска не обрезается)
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-      { src: "/icons/maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
-    ],
+      { src: "/icons/maskable-192.png", sizes: "192x192", type: "image/png", purpose: "any maskable" },
+      { src: "/icons/maskable-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+    ] as MetadataRoute.Manifest["icons"],
   };
 }
