@@ -281,7 +281,15 @@ export default function MenuScreen({
         </div>
 
         <footer className="mt-auto pt-5 text-center text-[11px] font-bold tracking-wide text-white/30">
-          {t.menuFooterLevels(doneLevels, LEVEL_COUNT)} · {t.menuFooterStars(stars, TOTAL_STARS)}
+          <div>{t.menuFooterLevels(doneLevels, LEVEL_COUNT)} · {t.menuFooterStars(stars, TOTAL_STARS)}</div>
+          {/* публичная ссылка на политику — нужна и игрокам, и Google Play */}
+          <a
+            href="/privacy"
+            aria-label={t.menuPrivacy}
+            className="-mx-2 mt-1.5 inline-block rounded-lg px-2 py-1 text-[10px] font-bold text-white/35 underline decoration-white/25 underline-offset-2 transition active:scale-95 hover:text-white/70"
+          >
+            {t.menuPrivacy}
+          </a>
         </footer>
       </main>
 

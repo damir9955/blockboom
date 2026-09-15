@@ -6,7 +6,7 @@
  * установке скачал их на устройство целиком (иначе офлайн потом «дырявый»):
  *   • public/**            → /<файл>            (иконки, арт, sw.js — сам sw не входит)
  *   • .next/static/**      → /_next/static/<файл> (JS-чанки, CSS, шрифты, медиа)
- *   • "/"                  → HTML игры (пререндер .next/server/app/index.html)
+ *   • "/" и "/privacy"    → HTML-страницы (пререндеры .next/server/app/*.html)
  *   • "/manifest.webmanifest" → PWA-манифест (роут app/manifest.ts)
  *
  * Итог пишется в public/precache-manifest.json — next start / Vercel отдают его
@@ -60,12 +60,18 @@ scan("public", "/");
 // 2) Чанки сборки Next (JS/CSS/шрифты/медиа) — отдаются с /_next/static/
 scan(".next/static", "/_next/static/");
 
-// 3) HTML игры и PWA-манифест
-let htmlSize = 0;
-try {
-  htmlSize = statSync(".next/server/app/index.html").size;
-} catch (_) {}
-push("/", htmlSize);
+// 3) HTML-страницы (игра + политика конфиденциальности) и PWA-манифест
+const HTML_ROUTES = [
+  ["/", ".next/server/app/index.html"],
+  ["/privacy", ".next/server/app/privacy.html"],
+];
+for (const [route, file] of HTML_ROUTES) {
+  let size = 0;
+  try {
+    size = statSync(file).size;
+  } catch (_) {}
+  push(route, size);
+}
 push("/manifest.webmanifest", 0);
 
 const totalBytes = files.reduce((s, f) => s + f.size, 0);

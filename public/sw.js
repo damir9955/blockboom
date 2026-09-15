@@ -18,6 +18,8 @@
  *
  * Стратегии ответов:
  *   • Вся статика и навигация — CACHE FIRST (мгновенный офлайн-старт).
+ *     Для внутренних страниц (политика конфиденциальности /privacy) отдаётся
+ *     их собственный кешированный HTML; неизвестные пути — фолбэк на игру.
  *     Никакой фоновой подмены HTML: версии приложения не смешиваются,
  *     обновление применяется целиком при перезапуске.
  *
@@ -29,8 +31,8 @@
  *   • Range-запросы (стриминг).
  */
 
-const APP_VERSION = "1.8.5";
-const CACHE = "blockboom-v7";
+const APP_VERSION = "1.8.6";
+const CACHE = "blockboom-v8";
 
 const MANIFEST_URL = "/precache-manifest.json";
 // «Файл»: игра полностью скачана (создаётся ПОСЛЕДНИМ, когда всё на месте)
@@ -50,6 +52,7 @@ const isNeverCache = (pathname) => NEVER_CACHE.some((re) => re.test(pathname));
 // найдёт чанки, а эти public-файлы известны заранее
 const FALLBACK_PUBLIC = [
   "/",
+  "/privacy",
   "/manifest.webmanifest",
   "/apple-touch-icon.png",
   "/art/icon.png",
@@ -277,16 +280,19 @@ self.addEventListener("fetch", (event) => {
   // Инфраструктура самого SW — всегда свежие из сети
   if (url.pathname === "/sw.js" || url.pathname === MANIFEST_URL || url.pathname === MARKER_URL) return;
 
-  // ── Запуск игры (HTML-навигация): мгновенно из кеша ──
+  // ── Запуск игры и внутренних страниц (HTML-навигация): мгновенно из кеша ──
   if (req.mode === "navigate") {
+    // Нормализуем путь: "/privacy/" → "/privacy"; корень — всегда "/"
+    const want = url.pathname === "/" ? "/" : url.pathname.replace(/\/+$/, "") || "/";
     event.respondWith(
       (async () => {
         const cache = await caches.open(CACHE);
-        const cached = await cache.match("/", { ignoreSearch: true });
+        // Свой HTML для каждой страницы (/, /privacy); неизвестные пути → игра
+        const cached = (await cache.match(want, { ignoreSearch: true })) || (await cache.match("/", { ignoreSearch: true }));
         if (cached) return cached; // старт без сети; обновление — только новым SW
         try {
           const res = await fetch(req);
-          if (res && res.ok) cache.put("/", res.clone());
+          if (res && res.ok) cache.put(want, res.clone());
           return res;
         } catch (_) {
           return Response.error();

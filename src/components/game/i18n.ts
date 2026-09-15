@@ -79,6 +79,7 @@ export interface Strings {
   backToMenuAria: string;
   menuFooterLevels: (n: number, total: number) => string;
   menuFooterStars: (n: number, total: number) => string;
+  menuPrivacy: string;
   // ежедневный подарок
   giftTitle: string;
   giftClaim: (n: number) => string;
@@ -255,6 +256,7 @@ const ru: Strings = {
   backToMenuAria: "Вернуться в главное меню",
   menuFooterLevels: (n, total) => `Уровни ${n}/${total}`,
   menuFooterStars: (n, total) => `Звёзды ${n}/${total}`,
+  menuPrivacy: "Политика конфиденциальности",
   giftTitle: "Ежедневный подарок",
   giftClaim: (n) => `Забрать +${n}`,
   giftClaimed: "Получен — приходи завтра",
@@ -428,6 +430,7 @@ const en: Strings = {
   backToMenuAria: "Back to the main menu",
   menuFooterLevels: (n, total) => `Levels ${n}/${total}`,
   menuFooterStars: (n, total) => `Stars ${n}/${total}`,
+  menuPrivacy: "Privacy Policy",
   giftTitle: "Daily gift",
   giftClaim: (n) => `Claim +${n}`,
   giftClaimed: "Claimed — come back tomorrow",
